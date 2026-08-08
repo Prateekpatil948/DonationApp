@@ -31,7 +31,7 @@ jobs:
             set -e
 
             echo "=========================================="
-            echo "       DONATION APP DEPLOYMENT"
+            echo "DONATION APP DEPLOYMENT"
             echo "=========================================="
 
             echo ""
@@ -39,16 +39,16 @@ jobs:
             hostname
 
             echo ""
-            echo "SSH User:"
-            whoami
+            echo "Current directory:"
+            pwd
 
             echo ""
-            echo "Home Directory:"
-            echo "$HOME"
+            echo "Checking operating system:"
+            uname -a
 
 
             # ==========================================
-            # DOCKER CHECK
+            # DOCKER
             # ==========================================
 
             echo ""
@@ -59,13 +59,8 @@ jobs:
             sudo docker --version
             sudo docker compose version
 
-            if ! sudo systemctl is-active --quiet docker; then
-                echo "Docker is not running."
-                echo "Starting Docker..."
-                sudo systemctl start docker
-            fi
-
-            echo "Docker is running."
+            echo "Docker service:"
+            sudo systemctl is-active docker
 
 
             # ==========================================
@@ -77,18 +72,52 @@ jobs:
             echo "PREPARING APPLICATION DIRECTORY"
             echo "=========================================="
 
-            APP_DIR="$HOME/donation"
+            APP_DIR="/home/ubuntu/donation"
 
             echo "Application directory:"
             echo "$APP_DIR"
 
-            mkdir -p "$APP_DIR"
+            if [ ! -d "$APP_DIR" ]; then
+              echo "Directory does not exist."
+              echo "Creating directory..."
 
-            echo "Directory created/verified."
+              sudo mkdir -p "$APP_DIR"
+              sudo chown -R ubuntu:ubuntu "$APP_DIR"
+
+              echo "Directory created."
+            else
+              echo "Directory already exists."
+            fi
+
+            echo ""
+            echo "Directory contents:"
+            ls -la "$APP_DIR"
 
 
             # ==========================================
-            # CLONE OR UPDATE REPOSITORY
+            # GIT
+            # ==========================================
+
+            echo ""
+            echo "=========================================="
+            echo "CHECKING GIT"
+            echo "=========================================="
+
+            if ! command -v git >/dev/null 2>&1; then
+              echo "Git is not installed."
+
+              sudo apt-get update
+              sudo apt-get install -y git
+
+            else
+              echo "Git is already installed."
+            fi
+
+            git --version
+
+
+            # ==========================================
+            # CLONE / UPDATE REPOSITORY
             # ==========================================
 
             echo ""
@@ -98,72 +127,62 @@ jobs:
 
             if [ ! -d "$APP_DIR/.git" ]; then
 
-                echo "Repository does not exist."
-                echo "Cloning DonationApp..."
+              echo "Repository does not exist."
+              echo "Cloning DonationApp..."
 
-                rm -rf "$APP_DIR"
+              sudo rm -rf "$APP_DIR"
 
-                git clone \
-                  https://github.com/Prateekpatil948/DonationApp.git \
-                  "$APP_DIR"
+              git clone \
+                https://github.com/Prateekpatil948/DonationApp.git \
+                "$APP_DIR"
 
-                echo "Repository cloned successfully."
+              echo "Repository cloned successfully."
 
             else
 
-                echo "Repository already exists."
-                echo "Updating repository..."
+              echo "Repository already exists."
+              echo "Updating repository..."
 
-                cd "$APP_DIR"
+              cd "$APP_DIR"
 
-                git fetch origin
+              git fetch origin
 
-                git reset --hard origin/main
+              git reset --hard origin/main
 
-                echo "Repository updated."
+              echo "Repository updated successfully."
 
             fi
 
 
             # ==========================================
-            # ENTER APPLICATION
+            # APPLICATION DIRECTORY
             # ==========================================
 
             cd "$APP_DIR"
 
             echo ""
             echo "=========================================="
-            echo "APPLICATION INFORMATION"
+            echo "APPLICATION"
             echo "=========================================="
 
-            echo "Path:"
+            echo "Application path:"
             pwd
 
             echo ""
-            echo "Files:"
-            ls -la
-
-
-            # ==========================================
-            # UPDATE CODE
-            # ==========================================
-
-            echo ""
-            echo "=========================================="
-            echo "UPDATING CODE"
-            echo "=========================================="
-
-            git fetch origin
-
-            git reset --hard origin/main
+            echo "Git remote:"
+            git remote -v
 
             echo ""
             echo "Latest commit:"
             git log -1 --oneline
 
+            echo ""
+            echo "Application files:"
+            ls -la
+
 
             # ==========================================
-            # DOCKER COMPOSE CHECK
+            # DOCKER COMPOSE
             # ==========================================
 
             echo ""
@@ -171,40 +190,52 @@ jobs:
             echo "CHECKING DOCKER COMPOSE"
             echo "=========================================="
 
-            if [ ! -f docker-compose.yml ]; then
-                echo "ERROR: docker-compose.yml not found!"
-                exit 1
+            if [ ! -f "$APP_DIR/docker-compose.yml" ]; then
+
+              echo "ERROR:"
+              echo "docker-compose.yml was not found."
+
+              exit 1
+
             fi
 
             echo "docker-compose.yml found."
 
 
             # ==========================================
-            # ENV FILE
+            # ENVIRONMENT FILE
             # ==========================================
 
             echo ""
             echo "=========================================="
-            echo "CHECKING ENVIRONMENT FILE"
+            echo "CHECKING .ENV"
             echo "=========================================="
 
-            if [ ! -f .env ]; then
-                echo ".env does not exist."
-                echo "Creating empty .env file..."
-                touch .env
+            if [ ! -f "$APP_DIR/.env" ]; then
+
+              echo ".env does not exist."
+
+              echo "Creating .env..."
+
+              touch "$APP_DIR/.env"
+
             else
-                echo ".env already exists."
+
+              echo ".env already exists."
+
             fi
 
 
             # ==========================================
-            # VALIDATE COMPOSE
+            # DOCKER COMPOSE VALIDATION
             # ==========================================
 
             echo ""
             echo "=========================================="
             echo "VALIDATING DOCKER COMPOSE"
             echo "=========================================="
+
+            cd "$APP_DIR"
 
             sudo docker compose config
 
@@ -250,7 +281,9 @@ jobs:
             # ==========================================
 
             echo ""
-            echo "Waiting for containers..."
+            echo "=========================================="
+            echo "WAITING FOR CONTAINERS"
+            echo "=========================================="
 
             sleep 15
 
@@ -280,7 +313,7 @@ jobs:
 
 
             # ==========================================
-            # DATABASE MIGRATIONS
+            # MIGRATIONS
             # ==========================================
 
             echo ""
@@ -319,5 +352,5 @@ jobs:
 
             echo ""
             echo "=========================================="
-            echo "    DEPLOYMENT SUCCESSFUL"
+            echo "DEPLOYMENT SUCCESSFUL"
             echo "=========================================="
