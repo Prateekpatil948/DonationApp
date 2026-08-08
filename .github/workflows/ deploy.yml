@@ -39,33 +39,28 @@ jobs:
             hostname
 
             echo ""
-            echo "SSH user:"
-            id -un
-
-            echo ""
             echo "User ID:"
             id -u
 
             echo ""
+            echo "Group ID:"
+            id -g
+
+            echo ""
             echo "Home directory:"
-            getent passwd "$(id -u)" | cut -d: -f6
-
-
-            # ==========================================
-            # DETERMINE USER AND HOME
-            # ==========================================
-
-            DEPLOY_USER="$(id -un)"
             HOME_DIR="$(getent passwd "$(id -u)" | cut -d: -f6)"
-            APP_DIR="$HOME_DIR/donation"
-
-            echo ""
-            echo "Deploy user:"
-            echo "$DEPLOY_USER"
-
-            echo ""
-            echo "Home directory:"
             echo "$HOME_DIR"
+
+            echo ""
+            echo "Current user:"
+            id -un
+
+
+            # ==========================================
+            # APPLICATION PATH
+            # ==========================================
+
+            APP_DIR="$HOME_DIR/donation"
 
             echo ""
             echo "Application directory:"
@@ -73,7 +68,7 @@ jobs:
 
 
             # ==========================================
-            # CHECK DOCKER
+            # DOCKER
             # ==========================================
 
             echo ""
@@ -84,13 +79,12 @@ jobs:
             sudo docker --version
             sudo docker compose version
 
-            echo ""
             echo "Docker service:"
             sudo systemctl is-active docker
 
 
             # ==========================================
-            # APPLICATION DIRECTORY
+            # PREPARE DIRECTORY
             # ==========================================
 
             echo ""
@@ -98,28 +92,26 @@ jobs:
             echo "PREPARING APPLICATION DIRECTORY"
             echo "=========================================="
 
-            if [ ! -d "$APP_DIR" ]; then
+            echo "Creating directory using sudo..."
 
-              echo "Application directory does not exist."
-              echo "Creating it..."
+            sudo mkdir -p "$APP_DIR"
 
-              mkdir -p "$APP_DIR"
+            echo "Directory created."
 
-              echo "Directory created."
+            echo "Setting directory ownership..."
 
-            else
+            sudo chown "$(id -u):$(id -g)" "$APP_DIR"
 
-              echo "Application directory already exists."
-
-            fi
+            echo "Ownership updated."
 
             echo ""
-            echo "Directory:"
+            echo "Directory permissions:"
+
             ls -ld "$APP_DIR"
 
 
             # ==========================================
-            # CHECK GIT
+            # GIT CHECK
             # ==========================================
 
             echo ""
@@ -141,7 +133,7 @@ jobs:
 
 
             # ==========================================
-            # CLONE OR UPDATE REPOSITORY
+            # CLONE / UPDATE
             # ==========================================
 
             echo ""
@@ -152,15 +144,15 @@ jobs:
             if [ ! -d "$APP_DIR/.git" ]; then
 
               echo "Repository does not exist."
+              echo "Cloning DonationApp..."
 
-              echo "Cloning:"
-              echo "https://github.com/Prateekpatil948/DonationApp.git"
-
-              rm -rf "$APP_DIR"
+              sudo rm -rf "$APP_DIR"
 
               git clone \
                 https://github.com/Prateekpatil948/DonationApp.git \
                 "$APP_DIR"
+
+              sudo chown -R "$(id -u):$(id -g)" "$APP_DIR"
 
               echo ""
               echo "Repository cloned successfully."
@@ -172,8 +164,10 @@ jobs:
               cd "$APP_DIR"
 
               git fetch origin
+
               git reset --hard origin/main
 
+              echo ""
               echo "Repository updated successfully."
 
             fi
@@ -190,7 +184,7 @@ jobs:
             echo "APPLICATION"
             echo "=========================================="
 
-            echo "Path:"
+            echo "Application path:"
             pwd
 
             echo ""
@@ -202,12 +196,12 @@ jobs:
             git log -1 --oneline
 
             echo ""
-            echo "Files:"
+            echo "Application files:"
             ls -la
 
 
             # ==========================================
-            # CHECK DOCKER COMPOSE
+            # DOCKER COMPOSE
             # ==========================================
 
             echo ""
@@ -227,12 +221,12 @@ jobs:
 
 
             # ==========================================
-            # ENVIRONMENT FILE
+            # ENVIRONMENT
             # ==========================================
 
             echo ""
             echo "=========================================="
-            echo "CHECKING ENVIRONMENT FILE"
+            echo "CHECKING .ENV"
             echo "=========================================="
 
             if [ ! -f .env ]; then
@@ -251,7 +245,7 @@ jobs:
 
 
             # ==========================================
-            # VALIDATE COMPOSE
+            # DOCKER COMPOSE VALIDATION
             # ==========================================
 
             echo ""
@@ -374,5 +368,5 @@ jobs:
 
             echo ""
             echo "=========================================="
-            echo "DEPLOYMENT SUCCESSFUL"
+            echo "    DEPLOYMENT SUCCESSFUL"
             echo "=========================================="
