@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: donation-production-deployment
+  group: donation-production
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
 
 
       # ============================================================
-      # DEPLOY TO ORACLE
+      # DEPLOY
       # ============================================================
 
       - name: Deploy to Oracle Cloud
@@ -46,7 +46,7 @@ jobs:
             set -e
 
             echo "=================================================="
-            echo "        DONATION APP - PRODUCTION DEPLOYMENT"
+            echo "       DONATION APP - PRODUCTION DEPLOYMENT"
             echo "=================================================="
 
 
@@ -54,21 +54,9 @@ jobs:
             # CONFIGURATION
             # ==================================================
 
-            APP_DIR="/donation"
+            APP_DIR="/home/ubuntu/donation"
             REPO_URL="https://github.com/Prateekpatil948/DonationApp.git"
             BRANCH="main"
-
-            echo ""
-            echo "Application directory:"
-            echo "$APP_DIR"
-
-            echo ""
-            echo "Repository:"
-            echo "$REPO_URL"
-
-            echo ""
-            echo "Branch:"
-            echo "$BRANCH"
 
 
             # ==================================================
@@ -84,7 +72,7 @@ jobs:
             hostname
 
             echo ""
-            echo "User:"
+            echo "Current user:"
             id -un
 
             echo ""
@@ -92,8 +80,8 @@ jobs:
             id -u
 
             echo ""
-            echo "Operating System:"
-            uname -a
+            echo "Application directory:"
+            echo "$APP_DIR"
 
 
             # ==================================================
@@ -109,7 +97,6 @@ jobs:
 
             if ! flock -n 9; then
                 echo "Another deployment is already running."
-                echo "Stopping this deployment."
                 exit 1
             fi
 
@@ -126,121 +113,65 @@ jobs:
             echo "=================================================="
 
             sudo docker --version
-
             sudo docker compose version
 
             if ! sudo systemctl is-active --quiet docker; then
-
                 echo "Docker is not running."
                 echo "Starting Docker..."
-
                 sudo systemctl start docker
-
             fi
 
             echo "Docker is running."
 
 
             # ==================================================
-            # PREPARE APPLICATION DIRECTORY
+            # CHECK APPLICATION DIRECTORY
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "PREPARING APPLICATION DIRECTORY"
+            echo "CHECKING APPLICATION DIRECTORY"
             echo "=================================================="
 
             if [ ! -d "$APP_DIR" ]; then
 
-                echo "Application directory does not exist."
-
-                echo "Creating:"
+                echo "ERROR: Application directory does not exist:"
                 echo "$APP_DIR"
 
-                sudo mkdir -p "$APP_DIR"
+                echo ""
+                echo "This workflow intentionally does not create or"
+                echo "modify the application directory automatically."
 
-                sudo chown "$(id -u):$(id -g)" "$APP_DIR"
-
-                echo "Application directory created."
-
-            else
-
-                echo "Application directory already exists."
+                exit 1
 
             fi
 
+            echo "Application directory exists."
+
 
             # ==================================================
-            # INITIAL CLONE
+            # CHECK GIT
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "CHECKING REPOSITORY"
+            echo "CHECKING GIT"
             echo "=================================================="
 
-            if [ ! -d "$APP_DIR/.git" ]; then
+            if ! command -v git >/dev/null 2>&1; then
 
-                echo "Git repository does not exist."
+                echo "Git is not installed."
 
-                echo "Performing first clone..."
-
-                # ------------------------------------------------
-                # Clone into temporary directory.
-                #
-                # This avoids deleting anything from /donation.
-                # ------------------------------------------------
-
-                TEMP_DIR="/tmp/donation-initial-clone"
-
-                sudo rm -rf "$TEMP_DIR"
-
-                git clone \
-                  --branch "$BRANCH" \
-                  --single-branch \
-                  "$REPO_URL" \
-                  "$TEMP_DIR"
-
-                echo "Repository cloned."
-
-
-                # ------------------------------------------------
-                # IMPORTANT:
-                # Never overwrite .env.
-                # ------------------------------------------------
-
-                if [ -f "$APP_DIR/.env" ]; then
-
-                    echo ""
-                    echo ".env already exists."
-                    echo "Preserving production .env."
-
-                    rm -rf "$TEMP_DIR/.env"
-
-                fi
-
-
-                # ------------------------------------------------
-                # Copy repository into application directory.
-                # ------------------------------------------------
-
-                cp -a "$TEMP_DIR"/. "$APP_DIR"/
-
-                rm -rf "$TEMP_DIR"
-
-                sudo chown -R "$(id -u):$(id -g)" "$APP_DIR"
-
-                echo "Initial deployment completed."
-
-            else
-
-                echo "Git repository already exists."
+                sudo apt-get update
+                sudo apt-get install -y git
 
             fi
 
+            git --version
+
 
             # ==================================================
-            # ENTER APPLICATION DIRECTORY
+            # ENTER APPLICATION
             # ==================================================
 
             cd "$APP_DIR"
@@ -251,48 +182,59 @@ jobs:
 
 
             # ==================================================
-            # PROTECT .ENV
+            # CHECK REPOSITORY
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "PROTECTING PRODUCTION .ENV"
+            echo "CHECKING REPOSITORY"
             echo "=================================================="
 
-            if [ ! -f "$APP_DIR/.env" ]; then
+            if [ ! -d ".git" ]; then
+
+                echo "ERROR: Git repository does not exist."
+                echo "$APP_DIR/.git"
+
+                exit 1
+
+            fi
+
+            echo "Git repository found."
+
+
+            # ==================================================
+            # CHECK REMOTE
+            # ==================================================
+
+            echo ""
+            echo "Git remote:"
+
+            git remote -v
+
+
+            # ==================================================
+            # CHECK PRODUCTION ENV
+            # ==================================================
+
+            echo ""
+            echo "=================================================="
+            echo "CHECKING PRODUCTION ENVIRONMENT"
+            echo "=================================================="
+
+            if [ ! -f ".env" ]; then
 
                 echo ""
-                echo "ERROR: Production .env file does not exist."
+                echo "ERROR: Production .env file is missing."
                 echo ""
-                echo "Deployment stopped."
-                echo "Create /donation/.env on the Oracle server first."
+                echo "Expected:"
+                echo "$APP_DIR/.env"
                 echo ""
 
                 exit 1
 
             fi
 
-            echo ".env exists."
-
-
-            # ------------------------------------------------
-            # Make sure .env is NOT tracked by Git.
-            # ------------------------------------------------
-
-            if git ls-files --error-unmatch .env >/dev/null 2>&1; then
-
-                echo ""
-                echo "ERROR: .env is tracked by Git."
-                echo ""
-                echo "For production safety, .env must NOT be committed."
-                echo "Remove .env from Git tracking and add it to .gitignore."
-                echo ""
-
-                exit 1
-
-            fi
-
-            echo ".env is not tracked by Git."
+            echo "Production .env exists."
 
 
             # ==================================================
@@ -304,80 +246,44 @@ jobs:
             echo "UPDATING SOURCE CODE"
             echo "=================================================="
 
+            echo "Fetching latest code..."
+
             git fetch origin "$BRANCH"
 
-            git checkout "$BRANCH"
+
+            echo ""
+            echo "Resetting application to origin/$BRANCH..."
 
             git reset --hard "origin/$BRANCH"
 
 
-            # ------------------------------------------------
-            # Clean untracked files EXCEPT .env
-            #
-            # This prevents old files from remaining after
-            # deployment while keeping production .env safe.
-            # ------------------------------------------------
-
-            git clean -fd -e .env
-
+            # ==================================================
+            # IMPORTANT:
+            # .env is NOT touched.
+            # ==================================================
 
             echo ""
-            echo "Source code updated."
+            echo "Production .env preserved."
 
 
             # ==================================================
-            # SHOW DEPLOYED COMMIT
+            # VERIFY ENV AFTER GIT UPDATE
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "DEPLOYED COMMIT"
+            echo "VERIFYING PRODUCTION ENV"
             echo "=================================================="
 
-            git log -1 --oneline
+            if [ ! -f ".env" ]; then
 
-
-            # ==================================================
-            # VERIFY .ENV AFTER GIT UPDATE
-            # ==================================================
-
-            echo ""
-            echo "=================================================="
-            echo "VERIFYING PRODUCTION .ENV"
-            echo "=================================================="
-
-            if [ ! -f "$APP_DIR/.env" ]; then
-
-                echo "ERROR: .env disappeared during deployment."
+                echo "ERROR: .env disappeared after Git update."
 
                 exit 1
 
             fi
 
             echo ".env is still present."
-
-            echo ""
-            echo "Checking required environment variables..."
-
-            REQUIRED_ENV_VARS="
-            DJANGO_SETTINGS_MODULE
-            SECRET_KEY
-            ALLOWED_HOSTS
-            "
-
-            for VAR in $REQUIRED_ENV_VARS; do
-
-                if ! grep -q "^${VAR}=" "$APP_DIR/.env"; then
-
-                    echo "WARNING: $VAR is not present in .env"
-
-                else
-
-                    echo "$VAR is configured."
-
-                fi
-
-            done
 
 
             # ==================================================
@@ -389,7 +295,7 @@ jobs:
             echo "CHECKING DOCKER COMPOSE"
             echo "=================================================="
 
-            if [ ! -f "$APP_DIR/docker-compose.yml" ]; then
+            if [ ! -f "docker-compose.yml" ]; then
 
                 echo "ERROR: docker-compose.yml not found."
 
@@ -401,7 +307,7 @@ jobs:
 
 
             # ==================================================
-            # VALIDATE DOCKER COMPOSE
+            # VALIDATE COMPOSE
             # ==================================================
 
             echo ""
@@ -415,7 +321,7 @@ jobs:
 
 
             # ==================================================
-            # BUILD DOCKER IMAGES
+            # BUILD
             # ==================================================
 
             echo ""
@@ -427,7 +333,7 @@ jobs:
 
 
             # ==================================================
-            # START / UPDATE APPLICATION
+            # START / UPDATE CONTAINERS
             # ==================================================
 
             echo ""
@@ -439,7 +345,7 @@ jobs:
 
 
             # ==================================================
-            # WAIT FOR CONTAINERS
+            # WAIT
             # ==================================================
 
             echo ""
@@ -451,7 +357,7 @@ jobs:
 
 
             # ==================================================
-            # CONTAINER STATUS
+            # STATUS
             # ==================================================
 
             echo ""
@@ -463,56 +369,19 @@ jobs:
 
 
             # ==================================================
-            # CHECK BACKEND HEALTH
+            # BACKEND LOGS
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "CHECKING BACKEND"
+            echo "BACKEND LOGS"
             echo "=================================================="
 
-            BACKEND_STATUS=$(sudo docker inspect \
-              --format='{{.State.Status}}' \
-              "$(sudo docker compose ps -q backend)" \
-              2>/dev/null || true)
-
-            echo "Backend status:"
-            echo "$BACKEND_STATUS"
-
-            if [ "$BACKEND_STATUS" != "running" ]; then
-
-                echo ""
-                echo "ERROR: Backend container is not running."
-
-                sudo docker compose logs --tail=200 backend
-
-                exit 1
-
-            fi
-
-            echo "Backend container is running."
+            sudo docker compose logs --tail=100 backend
 
 
             # ==================================================
-            # WAIT FOR POSTGRESQL
-            # ==================================================
-
-            echo ""
-            echo "=================================================="
-            echo "CHECKING DATABASE"
-            echo "=================================================="
-
-            DB_STATUS=$(sudo docker inspect \
-              --format='{{.State.Health.Status}}' \
-              "$(sudo docker compose ps -q db)" \
-              2>/dev/null || true)
-
-            echo "Database health:"
-            echo "$DB_STATUS"
-
-
-            # ==================================================
-            # RUN DATABASE MIGRATIONS
+            # DATABASE MIGRATIONS
             # ==================================================
 
             echo ""
@@ -527,7 +396,7 @@ jobs:
 
 
             # ==================================================
-            # COLLECT STATIC FILES
+            # STATIC FILES
             # ==================================================
 
             echo ""
@@ -542,7 +411,7 @@ jobs:
 
 
             # ==================================================
-            # FINAL CONTAINER STATUS
+            # FINAL STATUS
             # ==================================================
 
             echo ""
@@ -554,12 +423,12 @@ jobs:
 
 
             # ==================================================
-            # FINAL HEALTH CHECK
+            # APPLICATION HEALTH CHECK
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "FINAL APPLICATION CHECK"
+            echo "APPLICATION HEALTH CHECK"
             echo "=================================================="
 
             HTTP_STATUS=$(curl \
@@ -569,18 +438,15 @@ jobs:
               http://127.0.0.1:8002/ \
               || true)
 
-            echo "Application HTTP status:"
+            echo "HTTP status:"
             echo "$HTTP_STATUS"
 
             if [ "$HTTP_STATUS" = "000" ]; then
 
                 echo ""
-                echo "WARNING: Application did not respond on port 8002."
+                echo "ERROR: Application is not responding on port 8002."
 
-                echo ""
-                echo "Backend logs:"
-
-                sudo docker compose logs --tail=100 backend
+                sudo docker compose logs --tail=200 backend
 
                 exit 1
 
@@ -597,19 +463,15 @@ jobs:
             echo "=================================================="
 
             echo ""
-            echo "Application directory:"
+            echo "Application:"
             echo "$APP_DIR"
 
             echo ""
-            echo "Application URL:"
+            echo "URL:"
             echo "http://140.245.238.244:8002/"
 
             echo ""
             echo "Production .env:"
-            echo "PRESERVED"
-
-            echo ""
-            echo "PostgreSQL volumes:"
             echo "PRESERVED"
 
             echo ""
