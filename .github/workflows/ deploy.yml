@@ -39,16 +39,41 @@ jobs:
             hostname
 
             echo ""
-            echo "Current directory:"
-            pwd
+            echo "SSH user:"
+            id -un
 
             echo ""
-            echo "Checking operating system:"
-            uname -a
+            echo "User ID:"
+            id -u
+
+            echo ""
+            echo "Home directory:"
+            getent passwd "$(id -u)" | cut -d: -f6
 
 
             # ==========================================
-            # DOCKER
+            # DETERMINE USER AND HOME
+            # ==========================================
+
+            DEPLOY_USER="$(id -un)"
+            HOME_DIR="$(getent passwd "$(id -u)" | cut -d: -f6)"
+            APP_DIR="$HOME_DIR/donation"
+
+            echo ""
+            echo "Deploy user:"
+            echo "$DEPLOY_USER"
+
+            echo ""
+            echo "Home directory:"
+            echo "$HOME_DIR"
+
+            echo ""
+            echo "Application directory:"
+            echo "$APP_DIR"
+
+
+            # ==========================================
+            # CHECK DOCKER
             # ==========================================
 
             echo ""
@@ -59,6 +84,7 @@ jobs:
             sudo docker --version
             sudo docker compose version
 
+            echo ""
             echo "Docker service:"
             sudo systemctl is-active docker
 
@@ -72,30 +98,28 @@ jobs:
             echo "PREPARING APPLICATION DIRECTORY"
             echo "=========================================="
 
-            APP_DIR="/home/ubuntu/donation"
-
-            echo "Application directory:"
-            echo "$APP_DIR"
-
             if [ ! -d "$APP_DIR" ]; then
-              echo "Directory does not exist."
-              echo "Creating directory..."
 
-              sudo mkdir -p "$APP_DIR"
-              sudo chown -R ubuntu:ubuntu "$APP_DIR"
+              echo "Application directory does not exist."
+              echo "Creating it..."
+
+              mkdir -p "$APP_DIR"
 
               echo "Directory created."
+
             else
-              echo "Directory already exists."
+
+              echo "Application directory already exists."
+
             fi
 
             echo ""
-            echo "Directory contents:"
-            ls -la "$APP_DIR"
+            echo "Directory:"
+            ls -ld "$APP_DIR"
 
 
             # ==========================================
-            # GIT
+            # CHECK GIT
             # ==========================================
 
             echo ""
@@ -104,20 +128,20 @@ jobs:
             echo "=========================================="
 
             if ! command -v git >/dev/null 2>&1; then
+
               echo "Git is not installed."
+              echo "Installing Git..."
 
               sudo apt-get update
               sudo apt-get install -y git
 
-            else
-              echo "Git is already installed."
             fi
 
             git --version
 
 
             # ==========================================
-            # CLONE / UPDATE REPOSITORY
+            # CLONE OR UPDATE REPOSITORY
             # ==========================================
 
             echo ""
@@ -128,25 +152,26 @@ jobs:
             if [ ! -d "$APP_DIR/.git" ]; then
 
               echo "Repository does not exist."
-              echo "Cloning DonationApp..."
 
-              sudo rm -rf "$APP_DIR"
+              echo "Cloning:"
+              echo "https://github.com/Prateekpatil948/DonationApp.git"
+
+              rm -rf "$APP_DIR"
 
               git clone \
                 https://github.com/Prateekpatil948/DonationApp.git \
                 "$APP_DIR"
 
+              echo ""
               echo "Repository cloned successfully."
 
             else
 
               echo "Repository already exists."
-              echo "Updating repository..."
 
               cd "$APP_DIR"
 
               git fetch origin
-
               git reset --hard origin/main
 
               echo "Repository updated successfully."
@@ -155,7 +180,7 @@ jobs:
 
 
             # ==========================================
-            # APPLICATION DIRECTORY
+            # ENTER PROJECT
             # ==========================================
 
             cd "$APP_DIR"
@@ -165,7 +190,7 @@ jobs:
             echo "APPLICATION"
             echo "=========================================="
 
-            echo "Application path:"
+            echo "Path:"
             pwd
 
             echo ""
@@ -177,12 +202,12 @@ jobs:
             git log -1 --oneline
 
             echo ""
-            echo "Application files:"
+            echo "Files:"
             ls -la
 
 
             # ==========================================
-            # DOCKER COMPOSE
+            # CHECK DOCKER COMPOSE
             # ==========================================
 
             echo ""
@@ -190,10 +215,9 @@ jobs:
             echo "CHECKING DOCKER COMPOSE"
             echo "=========================================="
 
-            if [ ! -f "$APP_DIR/docker-compose.yml" ]; then
+            if [ ! -f docker-compose.yml ]; then
 
-              echo "ERROR:"
-              echo "docker-compose.yml was not found."
+              echo "ERROR: docker-compose.yml not found!"
 
               exit 1
 
@@ -208,16 +232,16 @@ jobs:
 
             echo ""
             echo "=========================================="
-            echo "CHECKING .ENV"
+            echo "CHECKING ENVIRONMENT FILE"
             echo "=========================================="
 
-            if [ ! -f "$APP_DIR/.env" ]; then
+            if [ ! -f .env ]; then
 
               echo ".env does not exist."
 
-              echo "Creating .env..."
+              touch .env
 
-              touch "$APP_DIR/.env"
+              echo ".env created."
 
             else
 
@@ -227,15 +251,13 @@ jobs:
 
 
             # ==========================================
-            # DOCKER COMPOSE VALIDATION
+            # VALIDATE COMPOSE
             # ==========================================
 
             echo ""
             echo "=========================================="
             echo "VALIDATING DOCKER COMPOSE"
             echo "=========================================="
-
-            cd "$APP_DIR"
 
             sudo docker compose config
 
