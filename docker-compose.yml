@@ -13,6 +13,7 @@ services:
       DATABASE_HOST: db
       DATABASE_PORT: "5432"
       DATABASE_URL: postgres://ra_user:ra_password@db:5432/ra_backend
+      ALLOWED_HOSTS: "localhost,127.0.0.1,10.0.2.2,140.245.238.244"
       # REDIS_URL: redis://redis:6379/0
     volumes:
       - .:/app
