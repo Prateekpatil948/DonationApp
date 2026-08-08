@@ -31,7 +31,7 @@ jobs:
             set -e
 
             echo "=========================================="
-            echo "DONATION APP DEPLOYMENT"
+            echo "      DONATION APP DEPLOYMENT"
             echo "=========================================="
 
             echo ""
@@ -39,30 +39,25 @@ jobs:
             hostname
 
             echo ""
-            echo "User ID:"
-            id -u
-
-            echo ""
-            echo "Group ID:"
-            id -g
-
-            echo ""
-            echo "Home directory:"
-            HOME_DIR="$(getent passwd "$(id -u)" | cut -d: -f6)"
-            echo "$HOME_DIR"
-
-            echo ""
             echo "Current user:"
             id -un
 
+            echo ""
+            echo "User ID:"
+            id -u
+
 
             # ==========================================
-            # APPLICATION PATH
+            # APPLICATION DIRECTORY
             # ==========================================
 
-            APP_DIR="$HOME_DIR/donation"
+            APP_DIR="/donation"
 
             echo ""
+            echo "=========================================="
+            echo "APPLICATION DIRECTORY"
+            echo "=========================================="
+
             echo "Application directory:"
             echo "$APP_DIR"
 
@@ -79,39 +74,39 @@ jobs:
             sudo docker --version
             sudo docker compose version
 
+            echo ""
             echo "Docker service:"
             sudo systemctl is-active docker
 
 
             # ==========================================
-            # PREPARE DIRECTORY
+            # PREPARE /DONATION
             # ==========================================
 
             echo ""
             echo "=========================================="
-            echo "PREPARING APPLICATION DIRECTORY"
+            echo "PREPARING /DONATION"
             echo "=========================================="
 
-            echo "Creating directory using sudo..."
+            if [ ! -d "$APP_DIR" ]; then
 
-            sudo mkdir -p "$APP_DIR"
+                echo "/donation does not exist."
 
-            echo "Directory created."
+                echo "Creating /donation..."
 
-            echo "Setting directory ownership..."
+                sudo mkdir -p "$APP_DIR"
 
-            sudo chown "$(id -u):$(id -g)" "$APP_DIR"
+                echo "/donation created."
 
-            echo "Ownership updated."
+            else
 
-            echo ""
-            echo "Directory permissions:"
+                echo "/donation already exists."
 
-            ls -ld "$APP_DIR"
+            fi
 
 
             # ==========================================
-            # GIT CHECK
+            # GIT
             # ==========================================
 
             echo ""
@@ -121,19 +116,21 @@ jobs:
 
             if ! command -v git >/dev/null 2>&1; then
 
-              echo "Git is not installed."
-              echo "Installing Git..."
+                echo "Git is not installed."
 
-              sudo apt-get update
-              sudo apt-get install -y git
+                echo "Installing Git..."
+
+                sudo apt-get update
+                sudo apt-get install -y git
 
             fi
 
+            echo "git version:"
             git --version
 
 
             # ==========================================
-            # CLONE / UPDATE
+            # CLONE REPOSITORY
             # ==========================================
 
             echo ""
@@ -143,34 +140,49 @@ jobs:
 
             if [ ! -d "$APP_DIR/.git" ]; then
 
-              echo "Repository does not exist."
-              echo "Cloning DonationApp..."
+                echo "Repository not found."
 
-              sudo rm -rf "$APP_DIR"
+                echo "Cloning DonationApp into /donation..."
 
-              git clone \
-                https://github.com/Prateekpatil948/DonationApp.git \
-                "$APP_DIR"
+                sudo rm -rf "$APP_DIR"
 
-              sudo chown -R "$(id -u):$(id -g)" "$APP_DIR"
+                sudo git clone \
+                    https://github.com/Prateekpatil948/DonationApp.git \
+                    "$APP_DIR"
 
-              echo ""
-              echo "Repository cloned successfully."
+                echo ""
+                echo "Repository cloned successfully."
 
             else
 
-              echo "Repository already exists."
+                echo "Repository already exists."
 
-              cd "$APP_DIR"
+                echo "Updating repository..."
 
-              git fetch origin
+                cd "$APP_DIR"
 
-              git reset --hard origin/main
+                sudo git fetch origin
 
-              echo ""
-              echo "Repository updated successfully."
+                sudo git reset --hard origin/main
+
+                echo ""
+                echo "Repository updated successfully."
 
             fi
+
+
+            # ==========================================
+            # FIX OWNERSHIP
+            # ==========================================
+
+            echo ""
+            echo "=========================================="
+            echo "SETTING PROJECT PERMISSIONS"
+            echo "=========================================="
+
+            sudo chown -R "$(id -u):$(id -g)" "$APP_DIR"
+
+            echo "Project ownership updated."
 
 
             # ==========================================
@@ -181,10 +193,10 @@ jobs:
 
             echo ""
             echo "=========================================="
-            echo "APPLICATION"
+            echo "PROJECT INFORMATION"
             echo "=========================================="
 
-            echo "Application path:"
+            echo "Current directory:"
             pwd
 
             echo ""
@@ -196,7 +208,7 @@ jobs:
             git log -1 --oneline
 
             echo ""
-            echo "Application files:"
+            echo "Project files:"
             ls -la
 
 
@@ -209,11 +221,12 @@ jobs:
             echo "CHECKING DOCKER COMPOSE"
             echo "=========================================="
 
-            if [ ! -f docker-compose.yml ]; then
+            if [ ! -f "$APP_DIR/docker-compose.yml" ]; then
 
-              echo "ERROR: docker-compose.yml not found!"
+                echo "ERROR:"
+                echo "docker-compose.yml was not found."
 
-              exit 1
+                exit 1
 
             fi
 
@@ -221,25 +234,29 @@ jobs:
 
 
             # ==========================================
-            # ENVIRONMENT
+            # ENVIRONMENT FILE
             # ==========================================
 
             echo ""
             echo "=========================================="
-            echo "CHECKING .ENV"
+            echo "CHECKING ENVIRONMENT FILE"
             echo "=========================================="
 
-            if [ ! -f .env ]; then
+            if [ ! -f "$APP_DIR/.env" ]; then
 
-              echo ".env does not exist."
+                echo ".env does not exist."
 
-              touch .env
+                echo "Creating .env..."
 
-              echo ".env created."
+                sudo touch "$APP_DIR/.env"
+
+                sudo chown "$(id -u):$(id -g)" "$APP_DIR/.env"
+
+                echo ".env created."
 
             else
 
-              echo ".env already exists."
+                echo ".env already exists."
 
             fi
 
@@ -305,7 +322,7 @@ jobs:
 
 
             # ==========================================
-            # STATUS
+            # CONTAINER STATUS
             # ==========================================
 
             echo ""
@@ -338,7 +355,7 @@ jobs:
             echo "=========================================="
 
             sudo docker compose exec -T backend \
-              python manage.py migrate --noinput
+                python manage.py migrate --noinput
 
 
             # ==========================================
@@ -351,7 +368,7 @@ jobs:
             echo "=========================================="
 
             sudo docker compose exec -T backend \
-              python manage.py collectstatic --noinput
+                python manage.py collectstatic --noinput
 
 
             # ==========================================
@@ -360,13 +377,25 @@ jobs:
 
             echo ""
             echo "=========================================="
-            echo "FINAL STATUS"
+            echo "FINAL CONTAINER STATUS"
             echo "=========================================="
 
             sudo docker compose ps
 
 
+            # ==========================================
+            # SUCCESS
+            # ==========================================
+
             echo ""
             echo "=========================================="
-            echo "    DEPLOYMENT SUCCESSFUL"
+            echo "       DEPLOYMENT SUCCESSFUL"
             echo "=========================================="
+
+            echo ""
+            echo "Application directory:"
+            echo "$APP_DIR"
+
+            echo ""
+            echo "Application URL:"
+            echo "http://140.245.238.244:8002/"
