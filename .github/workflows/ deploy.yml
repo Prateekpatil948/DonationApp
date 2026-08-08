@@ -1,4 +1,21 @@
-name: Deploy Django Application
+name: Deploy Django Application to Oracle Cloud
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Oracle Free Tier VM
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # --------------------------------------------------
+      # 1. Checkout repositoryname: Deploy Django Application
 
 on:
   push:
@@ -35,73 +52,419 @@ jobs:
             echo "Checking Docker"
             echo "========================================"
 
+      # --------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # --------------------------------------------------
+      # 2. Connect to Oracle VM and deploy
+      # --------------------------------------------------
+      - name: Deploy to Oracle Cloud
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USERNAME }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: 22
+
+          # Stop immediately if any command fails
+          script_stop: true
+
+          script: |
+
+            set -e
+
+            echo "=============================================="
+            echo "        ORACLE CLOUD DEPLOYMENT"
+            echo "=============================================="
+
+            # --------------------------------------------------
+            # Server information
+            # --------------------------------------------------
+            echo ""
+            echo ">>> Server information"
+
+            echo "Hostname:"
+            hostname
+
+            echo "Username:"
+            whoami
+
+            echo "Current directory:"
+            pwd
+
+
+            # --------------------------------------------------
+            # Docker check
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        CHECKING DOCKER"
+            echo "=============================================="
+
+            echo "Docker version:"
             sudo docker --version
+
+            echo ""
+            echo "Docker Compose version:"
             sudo docker compose version
 
-            echo "========================================"
-            echo "Checking Docker service"
-            echo "========================================"
-
+            echo ""
+            echo "Docker service status:"
             sudo systemctl is-active docker
 
-            echo "========================================"
-            echo "Checking application"
-            echo "========================================"
+
+            # --------------------------------------------------
+            # Application directory
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        APPLICATION DIRECTORY"
+            echo "=============================================="
 
             cd "${{ secrets.ORACLE_APP_PATH }}"
 
+            echo "Application path:"name: Deploy Django Application
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+          - name: Deploy to Oracle Cloud
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USERNAME }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: 22
+          script_stop: true
+
+          script: |
+            set -e
+
+            echo "========================================"
+            echo "SSH CONNECTION SUCCESSFUL"
+            echo "========================================"
+
+            echo "Server:"
+            hostname
+
+            echo "User:"
+            whoami
+
+            echo "========================================"
+            echo "Checking Docker"
+            echo "========================================"
+
             pwd
+
+            echo ""
+            echo "Application files:"
             ls -la
 
+
+            # --------------------------------------------------
+            # Check Git
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        GIT INFORMATION"
+            echo "=============================================="
+
+            echo "Git version:"
+            git --version
+
+            echo ""
+            echo "Current commit:"
+            git rev-parse --short HEADname: Deploy Django Application
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+          - name: Deploy to Oracle Cloud
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USERNAME }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: 22
+          script_stop: true
+
+          script: |
+            set -e
+
             echo "========================================"
-            echo "Updating code"
+            echo "SSH CONNECTION SUCCESSFUL"
             echo "========================================"
+
+            echo "Server:"
+            hostname
+
+            echo "User:"
+            whoami
+
+            echo "========================================"
+            echo "Checking Docker"
+            echo "========================================"
+
+
+            echo ""
+            echo "Current branch:"
+            git branch --show-current
+
+
+            # --------------------------------------------------
+            # Pull latest code
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="name: Deploy Django Application
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+          - name: Deploy to Oracle Cloud
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USERNAME }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: 22
+          script_stop: true
+
+          script: |
+            set -e
+
+            echo "========================================"
+            echo "SSH CONNECTION SUCCESSFUL"
+            echo "========================================"
+
+            echo "Server:"
+            hostname
+
+            echo "User:"
+            whoami
+
+            echo "========================================"
+            echo "Checking Docker"
+            echo "========================================"
+
+            echo "        UPDATING CODE"
+            echo "=============================================="
+
+            echo "Fetching latest code..."
 
             git fetch origin
+
+            echo "Resetting to origin/main..."
+
             git reset --hard origin/main
 
-            echo "========================================"
-            echo "Stopping containers"
-            echo "========================================"
+            echo "Code updated successfully."
+
+            echo ""
+            echo "Latest commit:"
+            git log -1 --oneline
+
+
+            # --------------------------------------------------
+            # Check Docker Compose file
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        CHECKING DOCKER COMPOSE"
+            echo "=============================================="
+
+            if [ ! -f docker-compose.yml ]; then
+              echo "ERROR: docker-compose.yml not found!"
+              exit 1
+            fi
+
+            echo "docker-compose.yml found."
+
+
+            # --------------------------------------------------
+            # Validate Docker Compose
+            # --------------------------------------------------
+            echo ""
+            echo "Validating Docker Compose configuration..."
+
+            sudo docker compose config
+
+
+            # --------------------------------------------------
+            # Stop existing containers
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        STOPPING OLD CONTAINERS"
+            echo "=============================================="
 
             sudo docker compose down
 
-            echo "========================================"
-            echo "Building containers"
-            echo "========================================"
 
-            sudo docker compose build
+            # --------------------------------------------------
+            # Build Docker images
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        BUILDING DOCKER IMAGES"
+            echo "=============================================="
 
-            echo "========================================"
-            echo "Starting containers"
-            echo "========================================"
+            sudo docker compose build --pull
+
+
+            # --------------------------------------------------
+            # Start containers
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        STARTING CONTAINERS"
+            echo "=============================================="
 
             sudo docker compose up -d
 
+
+            # --------------------------------------------------name: Deploy Django Application
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+          - name: Deploy to Oracle Cloud
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USERNAME }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: 22
+          script_stop: true
+
+          script: |
+            set -e
+
             echo "========================================"
-            echo "Container status"
+            echo "SSH CONNECTION SUCCESSFUL"
             echo "========================================"
+
+            echo "Server:"
+            hostname
+
+            echo "User:"
+            whoami
+
+            echo "========================================"
+            echo "Checking Docker"
+            echo "========================================"
+
+            # Wait for containers
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        WAITING FOR CONTAINERS"
+            echo "=============================================="
+
+            sleep 10
+
+
+            # --------------------------------------------------
+            # Container status
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        CONTAINER STATUS"
+            echo "=============================================="
 
             sudo docker compose ps
 
-            echo "========================================"
-            echo "Backend logs"
-            echo "========================================"
 
-            sudo docker compose logs --tail=50 backend
+            # --------------------------------------------------
+            # Backend logs
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        BACKEND LOGS"
+            echo "=============================================="
 
-            echo "========================================"
-            echo "Running migrations"
-            echo "========================================"
+            sudo docker compose logs --tail=100 backend
 
-            sudo docker compose exec -T backend python manage.py migrate --noinput
 
-            echo "========================================"
-            echo "Collecting static files"
-            echo "========================================"
+            # --------------------------------------------------
+            # Database status
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        DATABASE STATUS"
+            echo "=============================================="
 
-            sudo docker compose exec -T backend python manage.py collectstatic --noinput
+            sudo docker compose ps db
 
-            echo "========================================"
-            echo "DEPLOYMENT SUCCESSFUL"
-            echo "========================================"
+
+            # --------------------------------------------------
+            # Django migrations
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        RUNNING MIGRATIONS"
+            echo "=============================================="
+
+            sudo docker compose exec -T backend \
+              python manage.py migrate --noinput
+
+
+            # --------------------------------------------------
+            # Collect static files
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        COLLECTING STATIC FILES"
+            echo "=============================================="
+
+            sudo docker compose exec -T backend \
+              python manage.py collectstatic --noinput
+
+
+            # --------------------------------------------------
+            # Final container status
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "        FINAL STATUS"
+            echo "=============================================="
+
+            sudo docker compose ps
+
+
+            # --------------------------------------------------
+            # Deployment complete
+            # --------------------------------------------------
+            echo ""
+            echo "=============================================="
+            echo "     DEPLOYMENT SUCCESSFUL"
+            echo "=============================================="
+
+            echo ""
+            echo "Application containers are running."
+            echo "=============================================="
