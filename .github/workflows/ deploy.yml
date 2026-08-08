@@ -431,20 +431,33 @@ jobs:
             echo "APPLICATION HEALTH CHECK"
             echo "=================================================="
 
-            HTTP_STATUS=$(curl \
-              --silent \
-              --output /dev/null \
-              --write-out "%{http_code}" \
-              http://127.0.0.1:8002/ \
-              || true)
+            echo "Checking backend container..."
 
-            echo "HTTP status:"
-            echo "$HTTP_STATUS"
+            BACKEND_CONTAINER=$(sudo docker compose ps -q backend)
 
-            if [ "$HTTP_STATUS" = "000" ]; then
+            if [ -z "$BACKEND_CONTAINER" ]; then
+
+                echo "ERROR: Backend container not found."
+
+                sudo docker compose ps
+
+                exit 1
+
+            fi
+
+
+            BACKEND_STATUS=$(sudo docker inspect \
+                --format='{{.State.Status}}' \
+                "$BACKEND_CONTAINER")
+
+            echo "Backend status:"
+            echo "$BACKEND_STATUS"
+
+
+            if [ "$BACKEND_STATUS" != "running" ]; then
 
                 echo ""
-                echo "ERROR: Application is not responding on port 8002."
+                echo "ERROR: Backend container is not running."
 
                 sudo docker compose logs --tail=200 backend
 
@@ -452,6 +465,77 @@ jobs:
 
             fi
 
+
+            echo ""
+            echo "Backend container is running."
+
+
+            # ==================================================
+            # DJANGO SYSTEM CHECK
+            # ==================================================
+
+            echo ""
+            echo "Running Django system check..."
+
+            sudo docker compose exec -T backend \
+                python manage.py check
+
+            echo "Django system check passed."
+
+
+            # ==================================================
+            # HEALTH ENDPOINT
+            # ==================================================
+
+            echo ""
+            echo "Checking Django health endpoint..."
+
+            HTTP_STATUS=$(curl \
+                --connect-timeout 10 \
+                --max-time 15 \
+                --silent \
+                --output /dev/null \
+                --write-out "%{http_code}" \
+                http://127.0.0.1:8002/health \
+                || true)
+
+            echo ""
+            echo "Health endpoint HTTP status:"
+            echo "$HTTP_STATUS"
+
+
+            if [ "$HTTP_STATUS" != "200" ]; then
+
+                echo ""
+                echo "ERROR: Health check failed."
+
+                echo ""
+                echo "Docker status:"
+
+                sudo docker compose ps
+
+                echo ""
+                echo "Backend logs:"
+
+                sudo docker compose logs --tail=200 backend
+
+                exit 1
+
+            fi
+
+
+            echo ""
+            echo "Django health check PASSED."
+
+
+            # ==================================================
+            # SUCCESS
+            # ==================================================
+
+            echo ""
+            echo "=================================================="
+            echo "APPLICATION IS HEALTHY"
+            echo "=================================================="
 
             # ==================================================
             # SUCCESS
