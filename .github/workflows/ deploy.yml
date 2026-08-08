@@ -1,0 +1,127 @@
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        REQUIREMENTS_FILE: requirements/dev.txt
+
+    command:
+      - python
+      - manage.py
+      - runserver
+      - 0.0.0.0:8000
+
+    env_file:
+      - .env
+
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_URL: postgres://ra_user:ra_password@db:5432/ra_backend
+
+    volumes:
+      - .:/app
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+      - log_data:/app/logs
+
+    ports:
+      - "8002:8000"
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+
+    environment:
+      POSTGRES_DB: ra_backend
+      POSTGRES_USER: ra_user
+      POSTGRES_PASSWORD: ra_password
+
+    volumes:name: Deploy Django Application to Oracle Cloud
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Oracle Cloud VM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Oracle Cloud
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USERNAME }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            set -e
+
+            echo "========================================"
+            echo "Starting deployment..."
+            echo "========================================"
+
+            cd ${{ secrets.ORACLE_APP_PATH }}
+
+            echo "Pulling latest code..."
+            git fetch origin
+            git reset --hard origin/main
+
+            echo "Stopping old containers..."
+            docker compose down
+
+            echo "Building and starting containers..."
+            docker compose up -d --build
+
+            echo "Waiting for containers..."
+            sleep 10
+
+            echo "Container status:"
+            docker compose ps
+
+            echo "Running migrations..."
+            docker compose exec -T backend python manage.py migrate --noinput
+
+            echo "Collecting static files..."
+            docker compose exec -T backend python manage.py collectstatic --noinput
+
+            echo "========================================"
+            echo "Deployment completed successfully!"
+            echo "========================================"
+      - postgres_data:/var/lib/postgresql/data
+
+    ports:
+      - "5422:5432"
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ra_user -d ra_backend
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  static_data:
+  media_data:
+  log_data:
