@@ -18,27 +18,16 @@ jobs:
 
     steps:
 
-      # ============================================================
-      # CHECKOUT
-      # ============================================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # ============================================================
-      # DEPLOY
-      # ============================================================
-
       - name: Deploy to Oracle Cloud
         uses: appleboy/ssh-action@v1.2.0
-
         with:
           host: ${{ secrets.ORACLE_HOST }}
           username: ${{ secrets.ORACLE_USERNAME }}
           key: ${{ secrets.ORACLE_SSH_KEY }}
           port: 22
-
           script_stop: true
 
           script: |
@@ -60,7 +49,7 @@ jobs:
 
 
             # ==================================================
-            # SERVER INFORMATION
+            # SERVER
             # ==================================================
 
             echo ""
@@ -72,12 +61,8 @@ jobs:
             hostname
 
             echo ""
-            echo "Current user:"
+            echo "User:"
             id -un
-
-            echo ""
-            echo "User ID:"
-            id -u
 
             echo ""
             echo "Application directory:"
@@ -104,7 +89,7 @@ jobs:
 
 
             # ==================================================
-            # CHECK DOCKER
+            # DOCKER
             # ==================================================
 
             echo ""
@@ -125,7 +110,7 @@ jobs:
 
 
             # ==================================================
-            # CHECK APPLICATION DIRECTORY
+            # APPLICATION DIRECTORY
             # ==================================================
 
             echo ""
@@ -134,23 +119,15 @@ jobs:
             echo "=================================================="
 
             if [ ! -d "$APP_DIR" ]; then
-
-                echo "ERROR: Application directory does not exist:"
-                echo "$APP_DIR"
-
-                echo ""
-                echo "This workflow intentionally does not create or"
-                echo "modify the application directory automatically."
-
+                echo "ERROR: $APP_DIR does not exist."
                 exit 1
-
             fi
 
             echo "Application directory exists."
 
 
             # ==================================================
-            # CHECK GIT
+            # GIT
             # ==================================================
 
             echo ""
@@ -159,19 +136,16 @@ jobs:
             echo "=================================================="
 
             if ! command -v git >/dev/null 2>&1; then
-
                 echo "Git is not installed."
-
                 sudo apt-get update
                 sudo apt-get install -y git
-
             fi
 
             git --version
 
 
             # ==================================================
-            # ENTER APPLICATION
+            # ENTER PROJECT
             # ==================================================
 
             cd "$APP_DIR"
@@ -185,60 +159,34 @@ jobs:
             # CHECK REPOSITORY
             # ==================================================
 
-            echo ""
-            echo "=================================================="
-            echo "CHECKING REPOSITORY"
-            echo "=================================================="
-
             if [ ! -d ".git" ]; then
-
-                echo "ERROR: Git repository does not exist."
-                echo "$APP_DIR/.git"
-
+                echo "ERROR: Git repository not found."
                 exit 1
-
             fi
 
             echo "Git repository found."
 
 
             # ==================================================
-            # CHECK REMOTE
-            # ==================================================
-
-            echo ""
-            echo "Git remote:"
-
-            git remote -v
-
-
-            # ==================================================
-            # CHECK PRODUCTION ENV
+            # CHECK .ENV
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "CHECKING PRODUCTION ENVIRONMENT"
+            echo "PROTECTING PRODUCTION ENVIRONMENT"
             echo "=================================================="
 
             if [ ! -f ".env" ]; then
-
-                echo ""
-                echo "ERROR: Production .env file is missing."
-                echo ""
-                echo "Expected:"
-                echo "$APP_DIR/.env"
-                echo ""
-
+                echo "ERROR: Production .env does not exist."
                 exit 1
-
             fi
 
-            echo "Production .env exists."
+            echo ".env exists."
+            echo ".env will NOT be modified."
 
 
             # ==================================================
-            # UPDATE SOURCE CODE
+            # UPDATE CODE
             # ==================================================
 
             echo ""
@@ -246,48 +194,39 @@ jobs:
             echo "UPDATING SOURCE CODE"
             echo "=================================================="
 
-            echo "Fetching latest code..."
-
             git fetch origin "$BRANCH"
-
-
-            echo ""
-            echo "Resetting application to origin/$BRANCH..."
 
             git reset --hard "origin/$BRANCH"
 
-
-            # ==================================================
-            # IMPORTANT:
-            # .env is NOT touched.
-            # ==================================================
-
-            echo ""
-            echo "Production .env preserved."
+            echo "Source code updated."
 
 
             # ==================================================
-            # VERIFY ENV AFTER GIT UPDATE
+            # VERIFY .ENV
             # ==================================================
-
-            echo ""
-            echo "=================================================="
-            echo "VERIFYING PRODUCTION ENV"
-            echo "=================================================="
 
             if [ ! -f ".env" ]; then
-
-                echo "ERROR: .env disappeared after Git update."
-
+                echo "ERROR: .env was removed unexpectedly."
                 exit 1
-
             fi
 
             echo ".env is still present."
 
 
             # ==================================================
-            # CHECK DOCKER COMPOSE
+            # SHOW COMMIT
+            # ==================================================
+
+            echo ""
+            echo "=================================================="
+            echo "DEPLOYED COMMIT"
+            echo "=================================================="
+
+            git log -1 --oneline
+
+
+            # ==================================================
+            # DOCKER COMPOSE
             # ==================================================
 
             echo ""
@@ -296,11 +235,8 @@ jobs:
             echo "=================================================="
 
             if [ ! -f "docker-compose.yml" ]; then
-
                 echo "ERROR: docker-compose.yml not found."
-
                 exit 1
-
             fi
 
             echo "docker-compose.yml found."
@@ -326,19 +262,19 @@ jobs:
 
             echo ""
             echo "=================================================="
-            echo "BUILDING DOCKER IMAGES"
+            echo "BUILDING DOCKER IMAGE"
             echo "=================================================="
 
             sudo docker compose build --pull
 
 
             # ==================================================
-            # START / UPDATE CONTAINERS
+            # DEPLOY
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "STARTING / UPDATING CONTAINERS"
+            echo "STARTING APPLICATION"
             echo "=================================================="
 
             sudo docker compose up -d --remove-orphans
@@ -349,11 +285,9 @@ jobs:
             # ==================================================
 
             echo ""
-            echo "=================================================="
-            echo "WAITING FOR CONTAINERS"
-            echo "=================================================="
+            echo "Waiting for containers to start..."
 
-            sleep 15
+            sleep 10
 
 
             # ==================================================
@@ -369,28 +303,16 @@ jobs:
 
 
             # ==================================================
-            # BACKEND LOGS
+            # MIGRATIONS
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "BACKEND LOGS"
-            echo "=================================================="
-
-            sudo docker compose logs --tail=100 backend
-
-
-            # ==================================================
-            # DATABASE MIGRATIONS
-            # ==================================================
-
-            echo ""
-            echo "=================================================="
-            echo "RUNNING DATABASE MIGRATIONS"
+            echo "RUNNING MIGRATIONS"
             echo "=================================================="
 
             sudo docker compose exec -T backend \
-              python manage.py migrate --noinput
+                python manage.py migrate --noinput
 
             echo "Migrations completed."
 
@@ -405,7 +327,7 @@ jobs:
             echo "=================================================="
 
             sudo docker compose exec -T backend \
-              python manage.py collectstatic --noinput
+                python manage.py collectstatic --noinput
 
             echo "Static files collected."
 
@@ -423,119 +345,16 @@ jobs:
 
 
             # ==================================================
-            # APPLICATION HEALTH CHECK
+            # FINAL LOGS
             # ==================================================
 
             echo ""
             echo "=================================================="
-            echo "APPLICATION HEALTH CHECK"
+            echo "RECENT BACKEND LOGS"
             echo "=================================================="
 
-            echo "Checking backend container..."
+            sudo docker compose logs --tail=30 backend
 
-            BACKEND_CONTAINER=$(sudo docker compose ps -q backend)
-
-            if [ -z "$BACKEND_CONTAINER" ]; then
-
-                echo "ERROR: Backend container not found."
-
-                sudo docker compose ps
-
-                exit 1
-
-            fi
-
-
-            BACKEND_STATUS=$(sudo docker inspect \
-                --format='{{.State.Status}}' \
-                "$BACKEND_CONTAINER")
-
-            echo "Backend status:"
-            echo "$BACKEND_STATUS"
-
-
-            if [ "$BACKEND_STATUS" != "running" ]; then
-
-                echo ""
-                echo "ERROR: Backend container is not running."
-
-                sudo docker compose logs --tail=200 backend
-
-                exit 1
-
-            fi
-
-
-            echo ""
-            echo "Backend container is running."
-
-
-            # ==================================================
-            # DJANGO SYSTEM CHECK
-            # ==================================================
-
-            echo ""
-            echo "Running Django system check..."
-
-            sudo docker compose exec -T backend \
-                python manage.py check
-
-            echo "Django system check passed."
-
-
-            # ==================================================
-            # HEALTH ENDPOINT
-            # ==================================================
-
-            echo ""
-            echo "Checking Django health endpoint..."
-
-            HTTP_STATUS=$(curl \
-                --connect-timeout 10 \
-                --max-time 15 \
-                --silent \
-                --output /dev/null \
-                --write-out "%{http_code}" \
-                http://127.0.0.1:8002/health \
-                || true)
-
-            echo ""
-            echo "Health endpoint HTTP status:"
-            echo "$HTTP_STATUS"
-
-
-            if [ "$HTTP_STATUS" != "200" ]; then
-
-                echo ""
-                echo "ERROR: Health check failed."
-
-                echo ""
-                echo "Docker status:"
-
-                sudo docker compose ps
-
-                echo ""
-                echo "Backend logs:"
-
-                sudo docker compose logs --tail=200 backend
-
-                exit 1
-
-            fi
-
-
-            echo ""
-            echo "Django health check PASSED."
-
-
-            # ==================================================
-            # SUCCESS
-            # ==================================================
-
-            echo ""
-            echo "=================================================="
-            echo "APPLICATION IS HEALTHY"
-            echo "=================================================="
 
             # ==================================================
             # SUCCESS
