@@ -1,4 +1,4 @@
-name: Deploy Django Application
+name: Deploy DonationApp to Oracle Cloud
 
 on:
   push:
@@ -9,12 +9,22 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Oracle Cloud
+    name: Deploy to Oracle VM
     runs-on: ubuntu-latest
 
     steps:
+
+      # --------------------------------------------------
+      # Checkout GitHub repository
+      # --------------------------------------------------
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+
+      # --------------------------------------------------
+      # Deploy to Oracle VM
+      # --------------------------------------------------
 
       - name: Deploy to Oracle Cloud
         uses: appleboy/ssh-action@v1.2.0
@@ -23,118 +33,312 @@ jobs:
           username: ${{ secrets.ORACLE_USERNAME }}
           key: ${{ secrets.ORACLE_SSH_KEY }}
           port: 22
+
           script_stop: true
 
           script: |
+
             set -e
 
-            echo "========================================"
-            echo "SSH CONNECTION SUCCESSFUL"
-            echo "========================================"
+            echo "=========================================="
+            echo "      DONATION APP DEPLOYMENT"
+            echo "=========================================="
 
+            echo ""
             echo "Server:"
             hostname
 
+            echo ""
             echo "User:"
             whoami
 
-            echo "========================================"
+
+            # ==================================================
+            # Docker
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
             echo "CHECKING DOCKER"
-            echo "========================================"
+            echo "=========================================="
 
             sudo docker --version
+
             sudo docker compose version
 
-            echo "Docker service:"
-            sudo systemctl is-active docker
+            if ! sudo systemctl is-active --quiet docker; then
+                echo "Docker is not running."
+                echo "Starting Docker..."
 
-            echo "========================================"
-            echo "APPLICATION DIRECTORY"
-            echo "========================================"
+                sudo systemctl start docker
+            fi
 
-            cd "${{ secrets.ORACLE_APP_PATH }}"
+            echo "Docker is running."
 
-            echo "Application path:"
+
+            # ==================================================
+            # Application directory
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
+            echo "PREPARING APPLICATION DIRECTORY"
+            echo "=========================================="
+
+            APP_DIR="/home/ubuntu/donation"
+
+            echo "Application directory:"
+            echo "$APP_DIR"
+
+            mkdir -p "$APP_DIR"
+
+
+            # ==================================================
+            # Clone repository
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
+            echo "CHECKING REPOSITORY"
+            echo "=========================================="
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+
+                echo "Repository does not exist."
+                echo "Cloning DonationApp..."
+
+                rm -rf "$APP_DIR"
+
+                git clone \
+                  https://github.com/Prateekpatil948/DonationApp.git \
+                  "$APP_DIR"
+
+            else
+
+                echo "Repository already exists."
+
+            fi
+
+
+            # ==================================================
+            # Enter project
+            # ==================================================
+
+            cd "$APP_DIR"
+
+            echo ""
+            echo "Application directory:"
             pwd
 
-            echo "Files:"
+            echo ""
+            echo "Application files:"
             ls -la
 
-            echo "========================================"
-            echo "UPDATING CODE"
-            echo "========================================"
+
+            # ==================================================
+            # Update repository
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
+            echo "UPDATING SOURCE CODE"
+            echo "=========================================="
 
             git fetch origin
+
             git reset --hard origin/main
 
-            echo "Latest commit:"
+            echo ""
+            echo "Current commit:"
             git log -1 --oneline
 
-            echo "========================================"
+
+            # ==================================================
+            # Check Docker Compose
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
             echo "CHECKING DOCKER COMPOSE"
-            echo "========================================"
+            echo "=========================================="
 
             if [ ! -f docker-compose.yml ]; then
-              echo "ERROR: docker-compose.yml not found"
-              exit 1
+
+                echo "ERROR: docker-compose.yml not found."
+
+                exit 1
+
             fi
+
+            echo "docker-compose.yml found."
+
+
+            # ==================================================
+            # Check .env
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
+            echo "CHECKING ENVIRONMENT FILE"
+            echo "=========================================="
+
+            if [ ! -f .env ]; then
+
+                echo ".env does not exist."
+
+                echo "Creating .env..."
+
+                touch .env
+
+            else
+
+                echo ".env already exists."
+
+            fi
+
+
+            # ==================================================
+            # Validate Docker Compose
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
+            echo "VALIDATING DOCKER COMPOSE"
+            echo "=========================================="
 
             sudo docker compose config
 
-            echo "========================================"
+
+            # ==================================================
+            # Stop old containers
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
             echo "STOPPING OLD CONTAINERS"
-            echo "========================================"
+            echo "=========================================="
 
             sudo docker compose down
 
-            echo "========================================"
-            echo "BUILDING DOCKER IMAGES"
-            echo "========================================"
 
-            sudo docker compose build
+            # ==================================================
+            # Build containers
+            # ==================================================
 
-            echo "========================================"
-            echo "STARTING CONTAINERS"
-            echo "========================================"
+            echo ""
+            echo "=========================================="
+            echo "BUILDING DOCKER CONTAINERS"
+            echo "=========================================="
+
+            sudo docker compose build --pull
+
+
+            # ==================================================
+            # Start containers
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
+            echo "STARTING DOCKER CONTAINERS"
+            echo "=========================================="
 
             sudo docker compose up -d
 
-            echo "========================================"
-            echo "WAITING FOR CONTAINERS"
-            echo "========================================"
 
-            sleep 10
+            # ==================================================
+            # Wait for services
+            # ==================================================
 
-            echo "========================================"
+            echo ""
+            echo "=========================================="
+            echo "WAITING FOR SERVICES"
+            echo "=========================================="
+
+            sleep 15
+
+
+            # ==================================================
+            # Container status
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
             echo "CONTAINER STATUS"
-            echo "========================================"
+            echo "=========================================="
 
             sudo docker compose ps
 
-            echo "========================================"
+
+            # ==================================================
+            # Backend logs
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
             echo "BACKEND LOGS"
-            echo "========================================"
+            echo "=========================================="
 
             sudo docker compose logs --tail=100 backend
 
-            echo "========================================"
-            echo "RUNNING MIGRATIONS"
-            echo "========================================"
 
-            sudo docker compose exec -T backend python manage.py migrate --noinput
+            # ==================================================
+            # Database logs
+            # ==================================================
 
-            echo "========================================"
+            echo ""
+            echo "=========================================="
+            echo "DATABASE LOGS"
+            echo "=========================================="
+
+            sudo docker compose logs --tail=50 db
+
+
+            # ==================================================
+            # Django migrations
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
+            echo "RUNNING DATABASE MIGRATIONS"
+            echo "=========================================="
+
+            sudo docker compose exec -T backend \
+              python manage.py migrate --noinput
+
+
+            # ==================================================
+            # Collect static files
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
             echo "COLLECTING STATIC FILES"
-            echo "========================================"
+            echo "=========================================="
 
-            sudo docker compose exec -T backend python manage.py collectstatic --noinput
+            sudo docker compose exec -T backend \
+              python manage.py collectstatic --noinput
 
-            echo "========================================"
+
+            # ==================================================
+            # Final status
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
             echo "FINAL CONTAINER STATUS"
-            echo "========================================"
+            echo "=========================================="
 
             sudo docker compose ps
 
-            echo "========================================"
-            echo "DEPLOYMENT SUCCESSFUL"
-            echo "========================================"
+
+            # ==================================================
+            # Deployment complete
+            # ==================================================
+
+            echo ""
+            echo "=========================================="
+            echo "    DEPLOYMENT SUCCESSFUL"
+            echo "=========================================="
+
+            echo ""
+            echo "DonationApp is now running on Oracle Cloud."
