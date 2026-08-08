@@ -9,15 +9,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Oracle Cloud
-    runs-on: ubuntu-latest
-
-    steps:
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Test SSH connection
+          - name: Deploy to Oracle Cloud
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.ORACLE_HOST }}
@@ -27,6 +19,8 @@ jobs:
           script_stop: true
 
           script: |
+            set -e
+
             echo "========================================"
             echo "SSH CONNECTION SUCCESSFUL"
             echo "========================================"
@@ -37,18 +31,21 @@ jobs:
             echo "User:"
             whoami
 
-            echo "Current directory:"
-            pwd
-
             echo "========================================"
             echo "Checking Docker"
             echo "========================================"
 
-            docker --version
-            docker compose version
+            sudo docker --version
+            sudo docker compose version
 
             echo "========================================"
-            echo "Checking application directory"
+            echo "Checking Docker service"
+            echo "========================================"
+
+            sudo systemctl is-active docker
+
+            echo "========================================"
+            echo "Checking application"
             echo "========================================"
 
             cd "${{ secrets.ORACLE_APP_PATH }}"
@@ -57,53 +54,53 @@ jobs:
             ls -la
 
             echo "========================================"
-            echo "Git status"
-            echo "========================================"
-
-            git status
-
-            echo "========================================"
-            echo "Pulling latest code"
+            echo "Updating code"
             echo "========================================"
 
             git fetch origin
             git reset --hard origin/main
 
             echo "========================================"
-            echo "Stopping existing containers"
+            echo "Stopping containers"
             echo "========================================"
 
-            docker compose down
+            sudo docker compose down
 
             echo "========================================"
-            echo "Building and starting containers"
+            echo "Building containers"
             echo "========================================"
 
-            docker compose up -d --build
+            sudo docker compose build
 
             echo "========================================"
-            echo "Waiting for containers"
+            echo "Starting containers"
             echo "========================================"
 
-            sleep 10
+            sudo docker compose up -d
 
             echo "========================================"
-            echo "Docker Compose Status"
+            echo "Container status"
             echo "========================================"
 
-            docker compose ps
+            sudo docker compose ps
+
+            echo "========================================"
+            echo "Backend logs"
+            echo "========================================"
+
+            sudo docker compose logs --tail=50 backend
 
             echo "========================================"
             echo "Running migrations"
             echo "========================================"
 
-            docker compose exec -T backend python manage.py migrate --noinput
+            sudo docker compose exec -T backend python manage.py migrate --noinput
 
             echo "========================================"
             echo "Collecting static files"
             echo "========================================"
 
-            docker compose exec -T backend python manage.py collectstatic --noinput
+            sudo docker compose exec -T backend python manage.py collectstatic --noinput
 
             echo "========================================"
             echo "DEPLOYMENT SUCCESSFUL"
