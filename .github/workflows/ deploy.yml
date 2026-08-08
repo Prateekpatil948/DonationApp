@@ -7,6 +7,10 @@ on:
 
   workflow_dispatch:
 
+concurrency:
+  group: donation-production-deployment
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy to Oracle VM
@@ -14,217 +18,508 @@ jobs:
 
     steps:
 
+      # ============================================================
+      # CHECKOUT
+      # ============================================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # ============================================================
+      # DEPLOY TO ORACLE
+      # ============================================================
+
       - name: Deploy to Oracle Cloud
         uses: appleboy/ssh-action@v1.2.0
+
         with:
           host: ${{ secrets.ORACLE_HOST }}
           username: ${{ secrets.ORACLE_USERNAME }}
           key: ${{ secrets.ORACLE_SSH_KEY }}
           port: 22
+
           script_stop: true
 
           script: |
 
             set -e
 
-            echo "=========================================="
-            echo "      DONATION APP DEPLOYMENT"
-            echo "=========================================="
+            echo "=================================================="
+            echo "        DONATION APP - PRODUCTION DEPLOYMENT"
+            echo "=================================================="
+
+
+            # ==================================================
+            # CONFIGURATION
+            # ==================================================
+
+            APP_DIR="/donation"
+            REPO_URL="https://github.com/Prateekpatil948/DonationApp.git"
+            BRANCH="main"
 
             echo ""
+            echo "Application directory:"
+            echo "$APP_DIR"
+
+            echo ""
+            echo "Repository:"
+            echo "$REPO_URL"
+
+            echo ""
+            echo "Branch:"
+            echo "$BRANCH"
+
+
+            # ==================================================
+            # SERVER INFORMATION
+            # ==================================================
+
+            echo ""
+            echo "=================================================="
+            echo "SERVER INFORMATION"
+            echo "=================================================="
+
             echo "Hostname:"
             hostname
 
             echo ""
-            echo "Current user:"
+            echo "User:"
             id -un
 
             echo ""
             echo "User ID:"
             id -u
 
+            echo ""
+            echo "Operating System:"
+            uname -a
 
-            # ==========================================
-            # APPLICATION DIRECTORY
-            # ==========================================
 
-            APP_DIR="/donation"
+            # ==================================================
+            # DEPLOYMENT LOCK
+            # ==================================================
 
             echo ""
-            echo "=========================================="
-            echo "APPLICATION DIRECTORY"
-            echo "=========================================="
+            echo "=================================================="
+            echo "DEPLOYMENT LOCK"
+            echo "=================================================="
 
-            echo "Application directory:"
-            echo "$APP_DIR"
+            exec 9>/tmp/donation-deployment.lock
+
+            if ! flock -n 9; then
+                echo "Another deployment is already running."
+                echo "Stopping this deployment."
+                exit 1
+            fi
+
+            echo "Deployment lock acquired."
 
 
-            # ==========================================
-            # DOCKER
-            # ==========================================
+            # ==================================================
+            # CHECK DOCKER
+            # ==================================================
 
             echo ""
-            echo "=========================================="
+            echo "=================================================="
             echo "CHECKING DOCKER"
-            echo "=========================================="
+            echo "=================================================="
 
             sudo docker --version
+
             sudo docker compose version
 
+            if ! sudo systemctl is-active --quiet docker; then
+
+                echo "Docker is not running."
+                echo "Starting Docker..."
+
+                sudo systemctl start docker
+
+            fi
+
+            echo "Docker is running."
+
+
+            # ==================================================
+            # PREPARE APPLICATION DIRECTORY
+            # ==================================================
+
             echo ""
-            echo "Docker service:"
-            sudo systemctl is-active docker
-
-
-            # ==========================================
-            # PREPARE /DONATION
-            # ==========================================
-
-            echo ""
-            echo "=========================================="
-            echo "PREPARING /DONATION"
-            echo "=========================================="
+            echo "=================================================="
+            echo "PREPARING APPLICATION DIRECTORY"
+            echo "=================================================="
 
             if [ ! -d "$APP_DIR" ]; then
 
-                echo "/donation does not exist."
+                echo "Application directory does not exist."
 
-                echo "Creating /donation..."
+                echo "Creating:"
+                echo "$APP_DIR"
 
                 sudo mkdir -p "$APP_DIR"
 
-                echo "/donation created."
+                sudo chown "$(id -u):$(id -g)" "$APP_DIR"
+
+                echo "Application directory created."
 
             else
 
-                echo "/donation already exists."
+                echo "Application directory already exists."
 
             fi
 
 
-            # ==========================================
-            # GIT
-            # ==========================================
+            # ==================================================
+            # INITIAL CLONE
+            # ==================================================
 
             echo ""
-            echo "=========================================="
-            echo "CHECKING GIT"
-            echo "=========================================="
-
-            if ! command -v git >/dev/null 2>&1; then
-
-                echo "Git is not installed."
-
-                echo "Installing Git..."
-
-                sudo apt-get update
-                sudo apt-get install -y git
-
-            fi
-
-            echo "git version:"
-            git --version
-
-
-            # ==========================================
-            # CLONE REPOSITORY
-            # ==========================================
-
-            echo ""
-            echo "=========================================="
-            echo "CHECKING GIT REPOSITORY"
-            echo "=========================================="
+            echo "=================================================="
+            echo "CHECKING REPOSITORY"
+            echo "=================================================="
 
             if [ ! -d "$APP_DIR/.git" ]; then
 
-                echo "Repository not found."
+                echo "Git repository does not exist."
 
-                echo "Cloning DonationApp into /donation..."
+                echo "Performing first clone..."
 
-                sudo rm -rf "$APP_DIR"
+                # ------------------------------------------------
+                # Clone into temporary directory.
+                #
+                # This avoids deleting anything from /donation.
+                # ------------------------------------------------
 
-                sudo git clone \
-                    https://github.com/Prateekpatil948/DonationApp.git \
-                    "$APP_DIR"
+                TEMP_DIR="/tmp/donation-initial-clone"
 
-                echo ""
-                echo "Repository cloned successfully."
+                sudo rm -rf "$TEMP_DIR"
+
+                git clone \
+                  --branch "$BRANCH" \
+                  --single-branch \
+                  "$REPO_URL" \
+                  "$TEMP_DIR"
+
+                echo "Repository cloned."
+
+
+                # ------------------------------------------------
+                # IMPORTANT:
+                # Never overwrite .env.
+                # ------------------------------------------------
+
+                if [ -f "$APP_DIR/.env" ]; then
+
+                    echo ""
+                    echo ".env already exists."
+                    echo "Preserving production .env."
+
+                    rm -rf "$TEMP_DIR/.env"
+
+                fi
+
+
+                # ------------------------------------------------
+                # Copy repository into application directory.
+                # ------------------------------------------------
+
+                cp -a "$TEMP_DIR"/. "$APP_DIR"/
+
+                rm -rf "$TEMP_DIR"
+
+                sudo chown -R "$(id -u):$(id -g)" "$APP_DIR"
+
+                echo "Initial deployment completed."
 
             else
 
-                echo "Repository already exists."
-
-                echo "Updating repository..."
-
-                cd "$APP_DIR"
-
-                sudo git fetch origin
-
-                sudo git reset --hard origin/main
-
-                echo ""
-                echo "Repository updated successfully."
+                echo "Git repository already exists."
 
             fi
 
 
-            # ==========================================
-            # FIX OWNERSHIP
-            # ==========================================
-
-            echo ""
-            echo "=========================================="
-            echo "SETTING PROJECT PERMISSIONS"
-            echo "=========================================="
-
-            sudo chown -R "$(id -u):$(id -g)" "$APP_DIR"
-
-            echo "Project ownership updated."
-
-
-            # ==========================================
-            # ENTER PROJECT
-            # ==========================================
+            # ==================================================
+            # ENTER APPLICATION DIRECTORY
+            # ==================================================
 
             cd "$APP_DIR"
 
             echo ""
-            echo "=========================================="
-            echo "PROJECT INFORMATION"
-            echo "=========================================="
-
             echo "Current directory:"
             pwd
 
-            echo ""
-            echo "Git remote:"
-            git remote -v
+
+            # ==================================================
+            # PROTECT .ENV
+            # ==================================================
 
             echo ""
-            echo "Latest commit:"
+            echo "=================================================="
+            echo "PROTECTING PRODUCTION .ENV"
+            echo "=================================================="
+
+            if [ ! -f "$APP_DIR/.env" ]; then
+
+                echo ""
+                echo "ERROR: Production .env file does not exist."
+                echo ""
+                echo "Deployment stopped."
+                echo "Create /donation/.env on the Oracle server first."
+                echo ""
+
+                exit 1
+
+            fi
+
+            echo ".env exists."
+
+
+            # ------------------------------------------------
+            # Make sure .env is NOT tracked by Git.
+            # ------------------------------------------------
+
+            if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+
+                echo ""
+                echo "ERROR: .env is tracked by Git."
+                echo ""
+                echo "For production safety, .env must NOT be committed."
+                echo "Remove .env from Git tracking and add it to .gitignore."
+                echo ""
+
+                exit 1
+
+            fi
+
+            echo ".env is not tracked by Git."
+
+
+            # ==================================================
+            # UPDATE SOURCE CODE
+            # ==================================================
+
+            echo ""
+            echo "=================================================="
+            echo "UPDATING SOURCE CODE"
+            echo "=================================================="
+
+            git fetch origin "$BRANCH"
+
+            git checkout "$BRANCH"
+Run entrypoint.sh
+7s
+394
+Run entrypoint.sh
+804
+  Will download drone-ssh-1.8.0-linux-amd64 from https://github.com/appleboy/drone-ssh/releases/download/v1.8.0
+805
+  ======= CLI Version =======
+806
+  Drone SSH version 1.8.0
+807
+  ===========================
+808
+  ==========================================
+809
+        DONATION APP DEPLOYMENT
+810
+  ==========================================
+811
+  Hostname:
+812
+  my-server-vnic
+813
+  Current user:
+814
+  ***
+815
+  User ID:
+816
+  1001
+817
+  ==========================================
+818
+  APPLICATION DIRECTORY
+819
+  ==========================================
+820
+  Application directory:
+821
+  /donation
+822
+  ==========================================
+823
+  CHECKING DOCKER
+824
+  ==========================================
+825
+  Docker version 29.1.3, build 29.1.3-0***3~24.04.2
+826
+  Docker Compose version 2.40.3+ds1-0***1~24.04.1
+827
+  Docker service:
+828
+  active
+829
+  ==========================================
+830
+  PREPARING /DONATION
+831
+  ==========================================
+832
+  2026/08/08 14:25:56 Process exited with status 1
+833
+  Error: Process completed with exit code 1.
+
+            git reset --hard "origin/$BRANCH"
+
+
+            # ------------------------------------------------
+            # Clean untracked files EXCEPT .env
+            #
+            # This prevents old files from remaining after
+            # deployment while keeping production .env safe.
+            # ------------------------------------------------
+
+            git clean -fd -e .env
+
+
+            echo ""
+            echo "Source code updated."
+
+
+            # ==================================================
+            # SHOW DEPLOYED COMMIT
+            # ==================================================
+
+Run entrypoint.sh
+7s
+394
+Run entrypoint.sh
+804
+  Will download drone-ssh-1.8.0-linux-amd64 from https://github.com/appleboy/drone-ssh/releases/download/v1.8.0
+805
+  ======= CLI Version =======
+806
+  Drone SSH version 1.8.0
+807
+  ===========================
+808
+  ==========================================
+809
+        DONATION APP DEPLOYMENT
+810
+  ==========================================
+811
+  Hostname:
+812
+  my-server-vnic
+813
+  Current user:
+814
+  ***
+815
+  User ID:
+816
+  1001
+817
+  ==========================================
+818
+  APPLICATION DIRECTORY
+819
+  ==========================================
+820
+  Application directory:
+821
+  /donation
+822
+  ==========================================
+823
+  CHECKING DOCKER
+824
+  ==========================================
+825
+  Docker version 29.1.3, build 29.1.3-0***3~24.04.2
+826
+  Docker Compose version 2.40.3+ds1-0***1~24.04.1
+827
+  Docker service:
+828
+  active
+829
+  ==========================================
+830
+  PREPARING /DONATION
+831
+  ==========================================
+832
+  2026/08/08 14:25:56 Process exited with status 1
+833
+  Error: Process completed with exit code 1.
+            echo ""
+            echo "=================================================="
+            echo "DEPLOYED COMMIT"
+            echo "=================================================="
+
             git log -1 --oneline
 
-            echo ""
-            echo "Project files:"
-            ls -la
 
-
-            # ==========================================
-            # DOCKER COMPOSE
-            # ==========================================
+            # ==================================================
+            # VERIFY .ENV AFTER GIT UPDATE
+            # ==================================================
 
             echo ""
-            echo "=========================================="
+            echo "=================================================="
+            echo "VERIFYING PRODUCTION .ENV"
+            echo "=================================================="
+
+            if [ ! -f "$APP_DIR/.env" ]; then
+
+                echo "ERROR: .env disappeared during deployment."
+
+                exit 1
+
+            fi
+
+            echo ".env is still present."
+
+            echo ""
+            echo "Checking required environment variables..."
+
+            REQUIRED_ENV_VARS="
+            DJANGO_SETTINGS_MODULE
+            SECRET_KEY
+            ALLOWED_HOSTS
+            "
+
+            for VAR in $REQUIRED_ENV_VARS; do
+
+                if ! grep -q "^${VAR}=" "$APP_DIR/.env"; then
+
+                    echo "WARNING: $VAR is not present in .env"
+
+                else
+
+                    echo "$VAR is configured."
+
+                fi
+
+            done
+
+
+            # ==================================================
+            # CHECK DOCKER COMPOSE
+            # ==================================================
+
+            echo ""
+            echo "=================================================="
             echo "CHECKING DOCKER COMPOSE"
-            echo "=========================================="
+            echo "=================================================="
 
             if [ ! -f "$APP_DIR/docker-compose.yml" ]; then
 
-                echo "ERROR:"
-                echo "docker-compose.yml was not found."
+                echo "ERROR: docker-compose.yml not found."
 
                 exit 1
 
@@ -233,164 +528,201 @@ jobs:
             echo "docker-compose.yml found."
 
 
-            # ==========================================
-            # ENVIRONMENT FILE
-            # ==========================================
+            # ==================================================
+            # VALIDATE DOCKER COMPOSE
+            # ==================================================
 
             echo ""
-            echo "=========================================="
-            echo "CHECKING ENVIRONMENT FILE"
-            echo "=========================================="
-
-            if [ ! -f "$APP_DIR/.env" ]; then
-
-                echo ".env does not exist."
-
-                echo "Creating .env..."
-
-                sudo touch "$APP_DIR/.env"
-
-                sudo chown "$(id -u):$(id -g)" "$APP_DIR/.env"
-
-                echo ".env created."
-
-            else
-
-                echo ".env already exists."
-
-            fi
-
-
-            # ==========================================
-            # DOCKER COMPOSE VALIDATION
-            # ==========================================
-
-            echo ""
-            echo "=========================================="
+            echo "=================================================="
             echo "VALIDATING DOCKER COMPOSE"
-            echo "=========================================="
+            echo "=================================================="
 
-            sudo docker compose config
+            sudo docker compose config >/dev/null
 
-
-            # ==========================================
-            # STOP OLD CONTAINERS
-            # ==========================================
-
-            echo ""
-            echo "=========================================="
-            echo "STOPPING OLD CONTAINERS"
-            echo "=========================================="
-
-            sudo docker compose down
+            echo "Docker Compose configuration is valid."
 
 
-            # ==========================================
-            # BUILD
-            # ==========================================
+            # ==================================================
+            # BUILD DOCKER IMAGES
+            # ==================================================
 
             echo ""
-            echo "=========================================="
+            echo "=================================================="
             echo "BUILDING DOCKER IMAGES"
-            echo "=========================================="
+            echo "=================================================="
 
             sudo docker compose build --pull
 
 
-            # ==========================================
-            # START
-            # ==========================================
+            # ==================================================
+            # START / UPDATE APPLICATION
+            # ==================================================
 
             echo ""
-            echo "=========================================="
-            echo "STARTING CONTAINERS"
-            echo "=========================================="
+            echo "=================================================="
+            echo "STARTING / UPDATING CONTAINERS"
+            echo "=================================================="
 
-            sudo docker compose up -d
+            sudo docker compose up -d --remove-orphans
 
 
-            # ==========================================
-            # WAIT
-            # ==========================================
+            # ==================================================
+            # WAIT FOR CONTAINERS
+            # ==================================================
 
             echo ""
-            echo "=========================================="
+            echo "=================================================="
             echo "WAITING FOR CONTAINERS"
-            echo "=========================================="
+            echo "=================================================="
 
             sleep 15
 
 
-            # ==========================================
+            # ==================================================
             # CONTAINER STATUS
-            # ==========================================
+            # ==================================================
 
             echo ""
-            echo "=========================================="
+            echo "=================================================="
             echo "CONTAINER STATUS"
-            echo "=========================================="
+            echo "=================================================="
 
             sudo docker compose ps
 
 
-            # ==========================================
-            # BACKEND LOGS
-            # ==========================================
+            # ==================================================
+            # CHECK BACKEND HEALTH
+            # ==================================================
 
             echo ""
-            echo "=========================================="
-            echo "BACKEND LOGS"
-            echo "=========================================="
+            echo "=================================================="
+            echo "CHECKING BACKEND"
+            echo "=================================================="
 
-            sudo docker compose logs --tail=100 backend
+            BACKEND_STATUS=$(sudo docker inspect \
+              --format='{{.State.Status}}' \
+              "$(sudo docker compose ps -q backend)" \
+              2>/dev/null || true)
+
+            echo "Backend status:"
+            echo "$BACKEND_STATUS"
+
+            if [ "$BACKEND_STATUS" != "running" ]; then
+
+                echo ""
+                echo "ERROR: Backend container is not running."
+
+                sudo docker compose logs --tail=200 backend
+
+                exit 1
+
+            fi
+
+            echo "Backend container is running."
 
 
-            # ==========================================
-            # MIGRATIONS
-            # ==========================================
+            # ==================================================
+            # WAIT FOR POSTGRESQL
+            # ==================================================
 
             echo ""
-            echo "=========================================="
-            echo "RUNNING MIGRATIONS"
-            echo "=========================================="
+            echo "=================================================="
+            echo "CHECKING DATABASE"
+            echo "=================================================="
+
+            DB_STATUS=$(sudo docker inspect \
+              --format='{{.State.Health.Status}}' \
+              "$(sudo docker compose ps -q db)" \
+              2>/dev/null || true)
+
+            echo "Database health:"
+            echo "$DB_STATUS"
+
+
+            # ==================================================
+            # RUN DATABASE MIGRATIONS
+            # ==================================================
+
+            echo ""
+            echo "=================================================="
+            echo "RUNNING DATABASE MIGRATIONS"
+            echo "=================================================="
 
             sudo docker compose exec -T backend \
-                python manage.py migrate --noinput
+              python manage.py migrate --noinput
+
+            echo "Migrations completed."
 
 
-            # ==========================================
-            # STATIC FILES
-            # ==========================================
+            # ==================================================
+            # COLLECT STATIC FILES
+            # ==================================================
 
             echo ""
-            echo "=========================================="
+            echo "=================================================="
             echo "COLLECTING STATIC FILES"
-            echo "=========================================="
+            echo "=================================================="
 
             sudo docker compose exec -T backend \
-                python manage.py collectstatic --noinput
+              python manage.py collectstatic --noinput
+
+            echo "Static files collected."
 
 
-            # ==========================================
-            # FINAL STATUS
-            # ==========================================
+            # ==================================================
+            # FINAL CONTAINER STATUS
+            # ==================================================
 
             echo ""
-            echo "=========================================="
+            echo "=================================================="
             echo "FINAL CONTAINER STATUS"
-            echo "=========================================="
+            echo "=================================================="
 
             sudo docker compose ps
 
 
-            # ==========================================
-            # SUCCESS
-            # ==========================================
+            # ==================================================
+            # FINAL HEALTH CHECK
+            # ==================================================
 
             echo ""
-            echo "=========================================="
+            echo "=================================================="
+            echo "FINAL APPLICATION CHECK"
+            echo "=================================================="
+
+            HTTP_STATUS=$(curl \
+              --silent \
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              http://127.0.0.1:8002/ \
+              || true)
+
+            echo "Application HTTP status:"
+            echo "$HTTP_STATUS"
+
+            if [ "$HTTP_STATUS" = "000" ]; then
+
+                echo ""
+                echo "WARNING: Application did not respond on port 8002."
+
+                echo ""
+                echo "Backend logs:"
+
+                sudo docker compose logs --tail=100 backend
+
+                exit 1
+
+            fi
+
+
+            # ==================================================
+            # SUCCESS
+            # ==================================================
+
+            echo ""
+            echo "=================================================="
             echo "       DEPLOYMENT SUCCESSFUL"
-            echo "=========================================="
+            echo "=================================================="
 
             echo ""
             echo "Application directory:"
@@ -399,3 +731,14 @@ jobs:
             echo ""
             echo "Application URL:"
             echo "http://140.245.238.244:8002/"
+
+            echo ""
+            echo "Production .env:"
+            echo "PRESERVED"
+
+            echo ""
+            echo "PostgreSQL volumes:"
+            echo "PRESERVED"
+
+            echo ""
+            echo "Deployment completed successfully."
