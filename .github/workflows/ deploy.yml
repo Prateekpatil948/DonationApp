@@ -1,5 +1,5 @@
+name: deployment
 services:
-
   backend:
     build:
       context: .
