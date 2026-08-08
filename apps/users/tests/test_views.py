@@ -19,63 +19,39 @@ def test_profile_fetch_returns_current_user(authenticated_client):
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
     assert body["success"] is True
-    assert body["data"]["email"] == user.email
-    assert body["data"]["user_type"] == user.user_type
+    assert body["data"]["phone_number"] == user.phone_number
+    assert body["data"]["role"] == user.role
 
 
 def test_profile_update_editable_fields(authenticated_client):
     client, user = authenticated_client
 
-    response = client.put(
-        ME_URL,
-        {
-            "first_name": "Updated",
-            "last_name": "Name",
-            "phone_number": "+919999999999",
-            "profile_picture": "https://example.com/new.jpg",
-        },
-        format="json",
-    )
+    response = client.put(ME_URL, {"name": "Updated Name"}, format="json")
 
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
-    assert body["data"]["first_name"] == "Updated"
-    assert body["data"]["phone_number"] == "+919999999999"
+    assert body["data"]["name"] == "Updated Name"
 
     user.refresh_from_db()
-    assert user.first_name == "Updated"
+    assert user.name == "Updated Name"
 
 
 def test_profile_update_ignores_non_editable_fields(authenticated_client):
     client, user = authenticated_client
-    original_email = user.email
+    original_phone = user.phone_number
 
-    response = client.put(
-        ME_URL,
-        {"email": "hacker@example.com", "user_type": "SUBSCRIBER"},
-        format="json",
-    )
+    response = client.put(ME_URL, {"phone_number": "+910000000000", "role": "ADMIN"}, format="json")
 
     assert response.status_code == status.HTTP_200_OK
     user.refresh_from_db()
-    assert user.email == original_email
-    assert user.user_type == "ANALYST"
+    assert user.phone_number == original_phone
+    assert user.role == "MEMBER"
 
 
-def test_profile_update_validation_failure_on_bad_phone(authenticated_client):
-    client, _ = authenticated_client
-
-    response = client.put(ME_URL, {"phone_number": "not-a-phone"}, format="json")
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert response.json()["success"] is False
-    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
-
-
-def test_subscriber_cannot_access_analyst_only_permission(subscriber_user, api_client):
-    from core.permissions.roles import IsAnalyst
+def test_member_cannot_access_admin_only_permission(member_user):
+    from core.permissions.roles import IsAdminRole
 
     class FakeRequest:
-        user = subscriber_user
+        user = member_user
 
-    assert IsAnalyst().has_permission(FakeRequest(), None) is False
+    assert IsAdminRole().has_permission(FakeRequest(), None) is False

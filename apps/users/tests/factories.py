@@ -2,19 +2,23 @@ import factory
 from factory.django import DjangoModelFactory
 
 from apps.users.models import User
-from core.constants.choices import UserType
+from core.constants.choices import MemberStatus, UserRole
 
 
 class UserFactory(DjangoModelFactory):
     class Meta:
         model = User
-        django_get_or_create = ("email",)
+        django_get_or_create = ("phone_number",)
 
-    email = factory.Sequence(lambda n: f"user{n}@example.com")
-    first_name = factory.Faker("first_name")
-    last_name = factory.Faker("last_name")
-    phone_number = factory.Sequence(lambda n: f"+91900000{n:04d}")
-    user_type = UserType.ANALYST
-    google_id = factory.Sequence(lambda n: f"google-id-{n}")
-    is_verified = True
+    phone_number = factory.Sequence(lambda n: f"+9190000{n:05d}")
+    name = factory.Faker("name")
+    role = UserRole.MEMBER
+    status = MemberStatus.ACTIVE
     is_active = True
+
+    @factory.post_generation
+    def pin(self, create, extracted, **kwargs):
+        if not create:
+            return
+        self.set_password(extracted or "123456")
+        self.save(update_fields=["password"])

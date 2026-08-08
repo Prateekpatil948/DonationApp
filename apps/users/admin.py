@@ -1,37 +1,30 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from apps.users.models import User
+from apps.users.models import Invitation, User
 
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
     ordering = ["-created_at"]
-    list_display = [
-        "email",
-        "first_name",
-        "last_name",
-        "user_type",
-        "is_active",
-        "is_verified",
-        "is_staff",
-    ]
-    list_filter = ["user_type", "is_active", "is_verified", "is_staff"]
-    search_fields = ["email", "first_name", "last_name", "phone_number"]
-    readonly_fields = ["id", "google_id", "created_at", "updated_at", "last_login"]
+    list_display = ["phone_number", "name", "role", "status", "is_staff"]
+    list_filter = ["role", "status", "is_staff"]
+    search_fields = ["phone_number", "name"]
+    readonly_fields = ["id", "created_at", "updated_at", "last_login"]
     fieldsets = (
-        (None, {"fields": ("email", "password")}),
-        (
-            "Personal info",
-            {"fields": ("first_name", "last_name", "phone_number", "profile_picture")},
-        ),
+        (None, {"fields": ("phone_number", "password")}),
+        ("Personal info", {"fields": ("name",)}),
         (
             "Role & status",
             {
                 "fields": (
-                    "user_type",
+                    "role",
+                    "status",
+                    "suspension_reason",
+                    "suspended_at",
+                    "suspended_by",
+                    "invited_by",
                     "is_active",
-                    "is_verified",
                     "is_staff",
                     "is_superuser",
                     "groups",
@@ -39,7 +32,6 @@ class UserAdmin(DjangoUserAdmin):
                 )
             },
         ),
-        ("Google", {"fields": ("google_id",)}),
         ("Important dates", {"fields": ("last_login", "created_at", "updated_at")}),
     )
     add_fieldsets = (
@@ -47,7 +39,15 @@ class UserAdmin(DjangoUserAdmin):
             None,
             {
                 "classes": ("wide",),
-                "fields": ("email", "phone_number", "user_type", "password1", "password2"),
+                "fields": ("phone_number", "role", "status", "password1", "password2"),
             },
         ),
     )
+
+
+@admin.register(Invitation)
+class InvitationAdmin(admin.ModelAdmin):
+    list_display = ["phone_number", "role", "status", "invited_by", "created_at", "accepted_at"]
+    list_filter = ["status", "role"]
+    search_fields = ["phone_number"]
+    readonly_fields = ["id", "created_at", "accepted_at"]

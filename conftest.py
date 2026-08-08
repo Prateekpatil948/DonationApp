@@ -18,17 +18,49 @@ def user_factory(db):
 
 
 @pytest.fixture
-def analyst_user(user_factory):
-    return user_factory(user_type="ANALYST")
+def admin_user(user_factory):
+    from core.constants.choices import MemberStatus, UserRole
+
+    return user_factory(role=UserRole.ADMIN, status=MemberStatus.ACTIVE, is_staff=True)
 
 
 @pytest.fixture
-def subscriber_user(user_factory):
-    return user_factory(user_type="SUBSCRIBER")
+def member_user(user_factory):
+    from core.constants.choices import MemberStatus, UserRole
+
+    return user_factory(role=UserRole.MEMBER, status=MemberStatus.ACTIVE)
 
 
 @pytest.fixture
-def authenticated_client(api_client, analyst_user):
-    refresh = RefreshToken.for_user(analyst_user)
+def authenticated_client(api_client, member_user):
+    refresh = RefreshToken.for_user(member_user)
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
-    return api_client, analyst_user
+    return api_client, member_user
+
+
+@pytest.fixture
+def admin_client(api_client, admin_user):
+    refresh = RefreshToken.for_user(admin_user)
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
+    return api_client, admin_user
+
+
+@pytest.fixture
+def temple_settings(db):
+    from apps.common.models import TempleSettings
+
+    return TempleSettings.objects.create(temple_name="Sri Test Temple")
+
+
+@pytest.fixture
+def category_factory(db):
+    from apps.donations.tests.factories import DonationCategoryFactory
+
+    return DonationCategoryFactory
+
+
+@pytest.fixture
+def donation_factory(db):
+    from apps.donations.tests.factories import DonationFactory
+
+    return DonationFactory

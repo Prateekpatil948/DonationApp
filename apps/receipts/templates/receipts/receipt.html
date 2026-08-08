@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ labels.title }} - {{ donation.receipt_number }}</title>
+<style>
+    @page { size: A5; margin: 1.5cm; }
+    body {
+        font-family: "Noto Sans", "Noto Sans Kannada", "Noto Sans Devanagari", sans-serif;
+        font-size: 11pt;
+        color: #1a1a1a;
+    }
+    .header { text-align: center; margin-bottom: 12px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+    .header img.logo { max-height: 60px; margin-bottom: 6px; }
+    .temple-name { font-size: 16pt; font-weight: bold; }
+    .temple-meta { font-size: 9pt; color: #444; }
+    .receipt-title { text-align: center; font-size: 13pt; font-weight: bold; margin: 14px 0; text-decoration: underline; }
+    table.fields { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+    table.fields td { padding: 5px 4px; vertical-align: top; }
+    table.fields td.label { width: 38%; font-weight: bold; color: #333; }
+    .amount-row { font-size: 13pt; font-weight: bold; }
+    .footer-text { margin-top: 18px; font-size: 9.5pt; text-align: center; color: #333; }
+    .signature-block { margin-top: 40px; display: flex; justify-content: flex-end; }
+    .signature-line { text-align: center; font-size: 9.5pt; }
+    .signature-line .line { border-top: 1px solid #333; width: 180px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+    <div class="header">
+        {% if temple.logo_url %}<img class="logo" src="{{ temple.logo_url }}" alt="logo">{% endif %}
+        <div class="temple-name">{{ temple.temple_name }}</div>
+        <div class="temple-meta">
+            {{ temple.address }}{% if temple.phone %} | {{ temple.phone }}{% endif %}
+            {% if temple.registration_number %}<br>Reg. No: {{ temple.registration_number }}{% endif %}
+        </div>
+    </div>
+
+    <div class="receipt-title">{{ labels.title }}</div>
+
+    <table class="fields">
+        <tr>
+            <td class="label">{{ labels.receipt_no }}</td>
+            <td>{{ donation.receipt_number }}</td>
+        </tr>
+        <tr>
+            <td class="label">{{ labels.date }}</td>
+            <td>{{ donation.donation_date }}</td>
+        </tr>
+        <tr>
+            <td class="label">{{ labels.donor_name }}</td>
+            <td>{{ donation.donor_name }}</td>
+        </tr>
+        {% if donation.donor_phone %}
+        <tr>
+            <td class="label">{{ labels.phone }}</td>
+            <td>{{ donation.donor_phone }}</td>
+        </tr>
+        {% endif %}
+        {% if donation.donor_address %}
+        <tr>
+            <td class="label">{{ labels.address }}</td>
+            <td>{{ donation.donor_address }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td class="label">{{ labels.category }}</td>
+            <td>{{ donation.category.name }}</td>
+        </tr>
+        <tr class="amount-row">
+            <td class="label">{{ labels.amount }}</td>
+            <td>{{ temple.currency_symbol }} {{ donation.amount }}</td>
+        </tr>
+        <tr>
+            <td class="label">{{ labels.payment_mode }}</td>
+            <td>{% if donation.payment_mode == "CASH" %}{{ labels.cash }}{% else %}{{ labels.upi }}{% endif %}</td>
+        </tr>
+        {% if donation.utr_number %}
+        <tr>
+            <td class="label">{{ labels.utr }}</td>
+            <td>{{ donation.utr_number }}</td>
+        </tr>
+        {% endif %}
+        {% if donation.remarks %}
+        <tr>
+            <td class="label">{{ labels.remarks }}</td>
+            <td>{{ donation.remarks }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td class="label">{{ labels.collected_by }}</td>
+            <td>{{ donation.collected_by.name }}</td>
+        </tr>
+    </table>
+
+    <div class="signature-block">
+        <div class="signature-line">
+            {% if temple.signature_url %}<img src="{{ temple.signature_url }}" style="max-height: 40px;"><br>{% endif %}
+            <div class="line"></div>
+            {{ labels.signature }}
+        </div>
+    </div>
+
+    <div class="footer-text">{{ labels.thank_you }}</div>
+</body>
+</html>

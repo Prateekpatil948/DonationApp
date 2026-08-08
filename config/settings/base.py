@@ -41,8 +41,9 @@ LOCAL_APPS = [
     "apps.common",
     "apps.users",
     "apps.authentication",
-    "apps.analytics",
-    "apps.subscribers",
+    "apps.donations",
+    "apps.receipts",
+    "apps.reports",
     "apps.notifications",
 ]
 
@@ -122,10 +123,10 @@ CACHES = {
 AUTH_USER_MODEL = "users.User"
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 6},
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -170,7 +171,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": env("THROTTLE_ANON", default="100/hour"),
         "user": env("THROTTLE_USER", default="1000/hour"),
-        "google_login": env("THROTTLE_GOOGLE_LOGIN", default="20/hour"),
+        "signup": env("THROTTLE_SIGNUP", default="20/hour"),
+        "login": env("THROTTLE_LOGIN", default="20/hour"),
     },
     "EXCEPTION_HANDLER": "core.exceptions.handlers.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
@@ -198,8 +200,10 @@ SIMPLE_JWT = {
 # drf-spectacular
 # ---------------------------------------------------------------------------
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Analyst Platform Backend API",
-    "DESCRIPTION": "Production-grade backend API serving the Analyst Platform Android application.",
+    "TITLE": "Temple Donation Management System (TDMS) API",
+    "DESCRIPTION": "Production-grade backend API serving the TDMS Android application: "
+    "phone+PIN authentication, member management, donation entry, multi-language PDF "
+    "receipts and reports.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v[0-9]+",
@@ -211,12 +215,6 @@ SPECTACULAR_SETTINGS = {
 # ---------------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:3000"])
 CORS_ALLOW_CREDENTIALS = True
-
-# ---------------------------------------------------------------------------
-# Google OAuth
-# ---------------------------------------------------------------------------
-GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", default="")
-GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")
 
 # ---------------------------------------------------------------------------
 # Sentry

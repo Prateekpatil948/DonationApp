@@ -11,32 +11,25 @@ def test_user_response_serializer_exposes_expected_fields(user_factory):
 
     assert set(data.keys()) == {
         "id",
-        "email",
-        "first_name",
-        "last_name",
-        "profile_picture",
         "phone_number",
-        "user_type",
-        "is_active",
-        "is_verified",
+        "name",
+        "role",
+        "status",
+        "suspension_reason",
+        "suspended_at",
         "created_at",
         "updated_at",
     }
 
 
-def test_profile_update_serializer_accepts_valid_phone():
-    serializer = UserProfileUpdateRequestSerializer(data={"phone_number": "+919876543210"})
+def test_profile_update_serializer_accepts_name_only():
+    serializer = UserProfileUpdateRequestSerializer(data={"name": "New Name"})
     assert serializer.is_valid()
+    assert serializer.validated_data == {"name": "New Name"}
 
 
-def test_profile_update_serializer_rejects_invalid_phone():
-    serializer = UserProfileUpdateRequestSerializer(data={"phone_number": "abc"})
-    assert not serializer.is_valid()
-    assert "phone_number" in serializer.errors
-
-
-def test_profile_update_serializer_has_no_email_or_user_type_field():
+def test_profile_update_serializer_has_no_phone_or_role_field():
     serializer = UserProfileUpdateRequestSerializer(data={})
-    assert "email" not in serializer.fields
-    assert "google_id" not in serializer.fields
-    assert "user_type" not in serializer.fields
+    assert "phone_number" not in serializer.fields
+    assert "role" not in serializer.fields
+    assert "status" not in serializer.fields

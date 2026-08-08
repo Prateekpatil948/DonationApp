@@ -23,4 +23,10 @@ urlpatterns = [
     ),
     path("api/v1/auth/", include("apps.authentication.urls")),
     path("api/v1/users/", include("apps.users.urls")),
+    path("api/v1/members/", include("apps.users.member_urls")),
+    path("api/v1/categories/", include("apps.donations.urls")),
+    path("api/v1/donations/", include("apps.donations.donation_urls")),
+    path("api/v1/receipts/", include("apps.receipts.urls")),
+    path("api/v1/reports/", include("apps.reports.urls")),
+    path("api/v1/temple-settings/", include("apps.common.urls")),
 ]

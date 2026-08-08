@@ -1,3 +1,3 @@
-from .roles import IsAdminRole, IsAnalyst, IsSubscriber
+from .roles import IsActiveMember, IsAdminRole
 
-__all__ = ["IsAnalyst", "IsSubscriber", "IsAdminRole"]
+__all__ = ["IsAdminRole", "IsActiveMember"]

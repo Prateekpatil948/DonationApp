@@ -1,107 +1,92 @@
-from unittest.mock import patch
-
 import pytest
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.users.models import User
+from apps.users.services import InvitationService
+from core.constants.choices import UserRole
 
 pytestmark = pytest.mark.django_db
 
-GOOGLE_LOGIN_URL = "/api/v1/auth/google/login"
+SIGNUP_URL = "/api/v1/auth/signup"
+LOGIN_URL = "/api/v1/auth/login"
 LOGOUT_URL = "/api/v1/auth/logout"
 REFRESH_URL = "/api/v1/auth/refresh"
+CHANGE_PIN_URL = "/api/v1/auth/change-pin"
 
 
-def _google_claims(**overrides):
-    claims = {
-        "sub": "google-uid-123",
-        "email": "newanalyst@example.com",
-        "email_verified": True,
-        "given_name": "Jane",
-        "family_name": "Doe",
-        "picture": "https://example.com/photo.jpg",
-    }
-    claims.update(overrides)
-    return claims
-
-
-@patch("apps.authentication.services.google_id_token.verify_oauth2_token")
-def test_google_login_success_creates_user(mock_verify, api_client):
-    mock_verify.return_value = _google_claims()
+def test_signup_succeeds_for_invited_phone_number(api_client, admin_user):
+    InvitationService.invite(admin_user, "+919876533001", UserRole.MEMBER)
 
     response = api_client.post(
-        GOOGLE_LOGIN_URL,
-        {"id_token": "valid-token", "phone_number": "+919876543210", "user_type": "ANALYST"},
+        SIGNUP_URL,
+        {
+            "phone_number": "+919876533001",
+            "pin": "123456",
+            "confirm_pin": "123456",
+            "name": "Ravi Kumar",
+        },
         format="json",
     )
 
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
-    assert body["success"] is True
     assert "access" in body["data"]
-    assert "refresh" in body["data"]
-    assert body["data"]["user"]["email"] == "newanalyst@example.com"
-    assert User.objects.filter(google_id="google-uid-123").exists()
+    assert body["data"]["user"]["name"] == "Ravi Kumar"
 
 
-@patch("apps.authentication.services.google_id_token.verify_oauth2_token")
-def test_google_login_failure_invalid_token(mock_verify, api_client):
-    mock_verify.side_effect = ValueError("Token expired")
+def test_signup_rejects_mismatched_pin_confirmation(api_client, admin_user):
+    InvitationService.invite(admin_user, "+919876533002", UserRole.MEMBER)
 
     response = api_client.post(
-        GOOGLE_LOGIN_URL,
-        {"id_token": "bad-token", "phone_number": "+919876543210", "user_type": "ANALYST"},
+        SIGNUP_URL,
+        {
+            "phone_number": "+919876533002",
+            "pin": "123456",
+            "confirm_pin": "654321",
+            "name": "X",
+        },
         format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+def test_signup_rejects_uninvited_phone_number(api_client):
+    response = api_client.post(
+        SIGNUP_URL,
+        {"phone_number": "+919876533003", "pin": "123456", "confirm_pin": "123456", "name": "X"},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()["error"]["code"] == "NOT_INVITED"
+
+
+def test_login_success(api_client, user_factory):
+    user = user_factory(pin="123456")
+
+    response = api_client.post(
+        LOGIN_URL, {"phone_number": user.phone_number, "pin": "123456"}, format="json"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "access" in response.json()["data"]
+
+
+def test_login_failure_wrong_pin(api_client, user_factory):
+    user = user_factory(pin="123456")
+
+    response = api_client.post(
+        LOGIN_URL, {"phone_number": user.phone_number, "pin": "000000"}, format="json"
     )
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
-    body = response.json()
-    assert body["success"] is False
-    assert body["error"]["code"] == "INVALID_TOKEN"
+    assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"
 
 
-def test_google_login_missing_phone_number(api_client):
-    response = api_client.post(
-        GOOGLE_LOGIN_URL,
-        {"id_token": "some-token", "user_type": "ANALYST"},
-        format="json",
-    )
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert response.json()["success"] is False
-    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
-
-
-def test_google_login_missing_user_type(api_client):
-    response = api_client.post(
-        GOOGLE_LOGIN_URL,
-        {"id_token": "some-token", "phone_number": "+919876543210"},
-        format="json",
-    )
-
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
-
-
-@patch("apps.authentication.services.google_id_token.verify_oauth2_token")
-def test_google_login_existing_user_logs_in_without_duplicating(
-    mock_verify, api_client, analyst_user
-):
-    mock_verify.return_value = _google_claims(sub=analyst_user.google_id, email=analyst_user.email)
-
-    response = api_client.post(
-        GOOGLE_LOGIN_URL,
-        {"id_token": "valid-token", "phone_number": "+919876543210", "user_type": "ANALYST"},
-        format="json",
-    )
-
-    assert response.status_code == status.HTTP_200_OK
-    assert User.objects.filter(email=analyst_user.email).count() == 1
-
-
-def test_logout_blacklists_refresh_token(api_client, analyst_user):
-    refresh = RefreshToken.for_user(analyst_user)
+def test_logout_blacklists_refresh_token(api_client, member_user):
+    refresh = RefreshToken.for_user(member_user)
 
     response = api_client.post(LOGOUT_URL, {"refresh": str(refresh)}, format="json")
 
@@ -112,8 +97,8 @@ def test_logout_blacklists_refresh_token(api_client, analyst_user):
     assert reuse_response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_refresh_returns_new_access_token(api_client, analyst_user):
-    refresh = RefreshToken.for_user(analyst_user)
+def test_refresh_returns_new_access_token(api_client, member_user):
+    refresh = RefreshToken.for_user(member_user)
 
     response = api_client.post(REFRESH_URL, {"refresh": str(refresh)}, format="json")
 
@@ -126,6 +111,20 @@ def test_refresh_rejects_invalid_jwt(api_client):
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.json()["error"]["code"] == "TOKEN_EXPIRED"
+
+
+def test_change_pin_success(authenticated_client):
+    client, user = authenticated_client
+    user.set_password("123456")
+    user.save(update_fields=["password"])
+
+    response = client.post(
+        CHANGE_PIN_URL, {"old_pin": "123456", "new_pin": "654321"}, format="json"
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    user.refresh_from_db()
+    assert user.check_password("654321") is True
 
 
 def test_expired_jwt_rejected_on_protected_endpoint(api_client, user_factory):
@@ -141,3 +140,7 @@ def test_expired_jwt_rejected_on_protected_endpoint(api_client, user_factory):
     response = api_client.get("/api/v1/users/me")
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_user_model_has_no_google_fields():
+    assert not hasattr(User, "google_id")

@@ -3,25 +3,49 @@
 from rest_framework import serializers
 
 from apps.users.serializers import UserResponseSerializer
-from core.constants.choices import UserType
 from core.validators.phone import validate_phone_number
 
+PIN_REGEX = r"^\d{6}$"
 
-class GoogleLoginRequestSerializer(serializers.Serializer):
-    """``POST /api/v1/auth/google/login`` request body.
 
-    All three fields are mandatory per the TRD's Validation Rules -
-    ``phone_number``/``user_type`` are required even on repeat logins since
-    the same endpoint handles both sign-up and sign-in.
-    """
+class SignupRequestSerializer(serializers.Serializer):
+    """``POST /api/v1/auth/signup`` - complete signup for an invited phone number."""
 
-    id_token = serializers.CharField(allow_blank=False)
-    phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
-    user_type = serializers.ChoiceField(choices=UserType.choices)
+    phone_number = serializers.CharField(max_length=20)
+    pin = serializers.RegexField(
+        PIN_REGEX, error_messages={"invalid": "PIN must be exactly 6 digits."}
+    )
+    confirm_pin = serializers.CharField(write_only=True)
+    name = serializers.CharField(max_length=150)
 
     def validate_phone_number(self, value: str) -> str:
         validate_phone_number(value)
         return value
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs["pin"] != attrs["confirm_pin"]:
+            raise serializers.ValidationError({"confirm_pin": "PIN and confirmation do not match."})
+        return attrs
+
+
+class LoginRequestSerializer(serializers.Serializer):
+    """``POST /api/v1/auth/login`` - phone number + PIN login."""
+
+    phone_number = serializers.CharField(max_length=20)
+    pin = serializers.RegexField(
+        PIN_REGEX, error_messages={"invalid": "PIN must be exactly 6 digits."}
+    )
+
+    def validate_phone_number(self, value: str) -> str:
+        validate_phone_number(value)
+        return value
+
+
+class ChangePinRequestSerializer(serializers.Serializer):
+    """``POST /api/v1/auth/change-pin`` - change the caller's own PIN."""
+
+    old_pin = serializers.RegexField(PIN_REGEX)
+    new_pin = serializers.RegexField(PIN_REGEX)
 
 
 class TokenPairResponseSerializer(serializers.Serializer):

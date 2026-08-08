@@ -30,6 +30,7 @@ REST_FRAMEWORK = {
         **REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"],  # type: ignore  # noqa: F405
         "anon": None,
         "user": None,
-        "google_login": None,
+        "signup": None,
+        "login": None,
     },
 }

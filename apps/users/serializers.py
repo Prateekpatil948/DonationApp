@@ -1,14 +1,13 @@
 """Request/response serializers for the users app.
 
-Per the TRD's Serializer Guidelines: every endpoint gets an explicit request
-serializer and response serializer, no ``fields = "__all__"``, and field-level
-validation stays here while business logic stays in the service layer.
+Explicit request/response serializers only, no ``fields = "__all__"`` - field
+validation stays here, business logic stays in the service layer.
 """
 
 from rest_framework import serializers
 
-from apps.users.models import User
-from core.validators.phone import validate_phone_number
+from apps.users.models import Invitation, User
+from core.constants.choices import UserRole
 
 
 class UserResponseSerializer(serializers.ModelSerializer):
@@ -18,14 +17,12 @@ class UserResponseSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id",
-            "email",
-            "first_name",
-            "last_name",
-            "profile_picture",
             "phone_number",
-            "user_type",
-            "is_active",
-            "is_verified",
+            "name",
+            "role",
+            "status",
+            "suspension_reason",
+            "suspended_at",
             "created_at",
             "updated_at",
         ]
@@ -33,17 +30,32 @@ class UserResponseSerializer(serializers.ModelSerializer):
 
 
 class UserProfileUpdateRequestSerializer(serializers.Serializer):
-    """Validates the editable subset of a profile: name, phone, profile photo.
+    """Validates the editable subset of a profile: just the display name."""
 
-    Email, ``google_id`` and ``user_type`` are intentionally absent - the TRD
-    marks them as not editable via ``PUT /users/me``.
-    """
+    name = serializers.CharField(max_length=150, required=False, allow_blank=True)
 
-    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
-    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
-    phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
-    profile_picture = serializers.URLField(max_length=200, required=False, allow_blank=True)
+
+class InviteMemberRequestSerializer(serializers.Serializer):
+    """``POST /api/v1/members/invite`` request body."""
+
+    phone_number = serializers.CharField(max_length=20)
+    role = serializers.ChoiceField(choices=UserRole.choices, default=UserRole.MEMBER)
 
     def validate_phone_number(self, value: str) -> str:
+        from core.validators.phone import validate_phone_number
+
         validate_phone_number(value)
         return value
+
+
+class InvitationResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Invitation
+        fields = ["id", "phone_number", "role", "status", "created_at", "accepted_at"]
+        read_only_fields = fields
+
+
+class MemberReasonRequestSerializer(serializers.Serializer):
+    """Shared request body for suspend/reactivate/deactivate - a mandatory reason."""
+
+    reason = serializers.CharField(max_length=255, allow_blank=False)

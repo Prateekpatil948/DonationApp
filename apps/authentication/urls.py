@@ -1,11 +1,19 @@
 from django.urls import path
 
-from apps.authentication.views import GoogleLoginView, LogoutView, TokenRefreshView
+from apps.authentication.views import (
+    ChangePinView,
+    LoginView,
+    LogoutView,
+    SignupView,
+    TokenRefreshView,
+)
 
 app_name = "authentication"
 
 urlpatterns = [
-    path("google/login", GoogleLoginView.as_view(), name="google-login"),
+    path("signup", SignupView.as_view(), name="signup"),
+    path("login", LoginView.as_view(), name="login"),
     path("logout", LogoutView.as_view(), name="logout"),
     path("refresh", TokenRefreshView.as_view(), name="refresh"),
+    path("change-pin", ChangePinView.as_view(), name="change-pin"),
 ]
